@@ -1,0 +1,192 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    color: white;
+    position: relative; /* Make sure the body is positioned relative to use z-index */
+}
+
+.video-background {
+    position: relative;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.video-background video {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1; /* Make sure the video is behind the overlay */
+}
+
+.overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    color: brown;
+    z-index: 2; /* Make sure overlay is above the video */
+}
+
+.overlay h1 {
+    font-size: 20px;
+}
+
+.overlay .subtext {
+    color: blanchedalmond;
+    font-size: 25px;
+    padding: 5px;
+}
+
+nav {
+    position: absolute;
+    top: 0;
+    width: 100%;
+    background: rgba(103, 88, 69, 0.704);
+    padding: 10px;
+    z-index: 3; /* Make sure nav is above everything in the video background */
+}
+
+nav ul {
+    display: flex;
+    justify-content: center;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+nav ul li {
+    margin: 0 1rem;
+}
+
+nav ul li a {
+    color: white;
+    text-decoration: none;
+}
+
+.content {
+    display: flex;
+    height: 100vh;
+    background-color: white;
+    font-family: 'Times New Roman', serif;
+}
+
+.left {
+    width: 50%;
+    padding: 2rem;
+    box-sizing: border-box;
+    color: burlywood;
+    bottom: 50px;
+    background-color: black;
+}
+
+.left h2 {
+    font-size: 38px;
+    text-align: center;
+    font-family: 'Times New Roman', serif;
+}
+
+.left p {
+    font-size: 16px;
+    font-family: 'Times New Roman', serif;
+}
+
+.text__2 {
+    position: relative;
+    font-family: 'Times New Roman', serif;
+    color: brown;
+    font-size: 20px;
+    padding: 20px;
+    top: 40px;
+}
+
+.button {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    color: burlywood;
+    text-decoration: none;
+    border: 2px solid brown;
+    border-radius: 5px;
+}
+
+.right {
+    width: 50%;
+    overflow: hidden;
+}
+
+.right video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.vertical-line {
+    border-left: 1px solid white;
+    height: 52.5%;
+    position: relative;
+    margin-top: 20px;
+    left: 300px;
+}
+
+.HOW_IT_WORKS {
+    position: relative;
+    left: 230px;
+    font-family: 'Times New Roman', serif;
+    color: brown;
+    font-size: 14px;
+}
+
+.background-video {
+    position: relative;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    z-index: 1; /* Ensure this is below the content */
+}
+
+.background-video video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1; /* Ensure this is below the content */
+}
+
+.circular-container {
+    position: relative;
+    width: 212%;
+    height: 190%;
+    display: flex;
+    overflow: hidden;
+    margin-top: 100px;
+    flex-direction: column;
+    z-index: 2; /* Ensure this is above the background video */
+}
+
+footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: transparent;
+    color: white;
+    text-align: center;
+    padding: 10px;
+    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.5);
+    z-index: 4; /* Ensure footer is on top of everything */
+}
+
+footer p {
+    margin: 5px 0;
+    font-size: 14px;
+}
