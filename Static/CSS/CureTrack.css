@@ -169,10 +169,9 @@ footer {
     left: 0;
     width: 100%;
     background: transparent;
-    color: white;
+    color: burlywood;
     text-align: center;
     padding: 10px;
-    box-shadow: 0 -2px 4px rgba(0, 0, 0, 0.5); /* Slight shadow for separation */
 }
 
 footer p {
