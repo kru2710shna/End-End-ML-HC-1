@@ -78,6 +78,7 @@ nav ul li a {
     height: 100vh;
     background-color: white;
     font-family: 'Times New Roman', serif;
+    transition: filter 0.3s ease;
 }
 
 .left {
@@ -103,11 +104,17 @@ nav ul li a {
 .text__2 {
     position: relative;
     font-family: 'Times New Roman', serif;
-    color: brown;
-    font-size: 20px;
-    padding: 50px;
-    top: 100px;
-    width: 180%;
+    color: solid black;
+    font-size: 34px;
+    padding: 0;
+    margin: 0;
+    top: 139px;
+    width: 100vw; /* Adjust to viewport width */
+    height: 200vh; /* Adjust to viewport height */
+    background-image: url('../Images/pexels-tara-winstead-6694135.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat; /* Prevents repetition of the image */
 }
 
 .button {
@@ -129,6 +136,40 @@ nav ul li a {
     height: 100%;
     object-fit: cover;
 }
+
+.button {
+    display: inline-block;
+    padding: 0.5rem 1rem;
+    color: burlywood;
+    text-decoration: none;
+    border: 2px solid brown;
+    border-radius: 5px;
+}
+
+.form-group {
+    background-color: white;
+    position: relative; /* Ensure it's not affecting the button */
+    width: 80%; /* Make sure the width is set appropriately */
+    padding: 1rem; /* Adjust padding for spacing */
+}
+
+textarea {
+    border: 2px solid black;
+    border-radius: 4px;
+    padding: 10px;
+    font-size: 16px;
+    width: 100%; /* Adjust width as needed, 100% for full width */
+    box-sizing: border-box;
+    margin: 0; /* Remove any margin */
+    position: absolute; /* Optional: if you need specific positioning */
+    left: 0; /* Aligns the textarea to the left of the container */
+}
+
+textarea:focus {
+    outline: none;
+    border-color: darkbrown;
+}
+
 
 .vertical-line {
     border-left: 1px solid white;
@@ -163,18 +204,229 @@ nav ul li a {
     z-index: 1; /* Ensure this is below the content */
 }
 
-footer {
+.symptom-form {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 20px;
+    z-index: 4; /* Ensure it's above other elements if needed */
+}
+
+/* Style the input field */
+.form-control {
+    width: 80%; /* Make it long */
+    padding: 15px; /* Increase padding for better UX */
+    font-size: 16px;
+    border: 2px solid #ccc; /* Add border */
+    border-radius: 5px; /* Slightly round corners */
+    margin-bottom: 20px; /* Space between input and button */
+    box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1); /* Optional: Add a subtle shadow */
+}
+
+/* Style the submit button */
+.submit-button {
+    background-color: #007BFF; /* Button color */
+    color: white;
+    padding: 15px 30px;
+    font-size: 16px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin-top: 50px; /* Space above button */
+    z-index: 5; /* Ensure it's above other elements if needed */
+}
+
+
+.submit-button:hover {
+    background-color: #0056b3; /* Darker shade on hover */
+}
+
+/* Align the form label to the center */
+.symptom-form label {
+    font-size: 18px;
+    margin-bottom: 10px;
+}
+
+/* Loading Screen */
+.loading-screen {
     position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.8); /* Light overlay */
+    display: none; /* Hidden by default */
+    align-items: center;
+    justify-content: center;
+    z-index: 1000; /* Ensure it's on top of other content */
+}
+
+.loading-screen.active {
+    display: flex; /* Show when active */
+}
+
+.content-blur {
+    filter: blur(4px); /* Blur content */
+}
+
+.content {
+    transition: filter 0.3s ease; /* Smooth transition for blur effect */
+}
+
+.loading-text  {
+    color: black;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 24px;
+}
+/* Style for diagnosis results container */
+.diagnosis-results {
+    border: 2px black; /* Brown border */
+    border-radius: 8px; /* Slightly rounded corners */
+    padding: 20px; /* Add padding inside the box */
+    margin: 20px 0; /* Margin around the box */
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); /* Optional: Add a subtle shadow */
+    font-size: medium;
+}
+
+.diagnosis-results p{
+    color: black;
+
+}
+/* General Styles */
+.disease-section {
+    margin-bottom: 20px;
+
+}
+
+/* Description Section */
+.disease-section-description {
+    margin-bottom: 20px; /* Adjust this to reduce gap between Description and Precautions */
+}
+
+.disease-section-description h5 {
+    margin-bottom: 5px; /* Reduce white space between h5 and p */
+}
+
+/* Precautions Section */
+.disease-section-precaution {
+    margin-top: 40px; /* Increase gap between Description and Precautions */
+    margin-bottom: 20px; /* Adjust this to reduce gap between Precautions and Medication */
+}
+
+.disease-section-precaution h5 {
+    margin-bottom: 5px; /* Reduce white space between h5 and ul */
+}
+
+/* Medication Section */
+.disease-section-medication {
+    margin-top: 40px; /* Increase gap between Precautions and Medication */
+    margin-bottom: 20px; /* Adjust this to reduce gap between Medication and Diet */
+
+}
+
+.disease-section-medication h5 {
+    margin-bottom: 5px; /* Reduce white space between h5 and p */
+
+}
+
+/* Diet Section */
+.disease-section-diet {
+    margin-top: 40px; /* Increase gap between Medication and Diet */
+    margin-bottom: 20px; /* Adjust this to reduce gap between Diet and Workout */
+
+}
+
+.disease-section-diet h5 {
+    margin-bottom: 5px; /* Reduce white space between h5 and ul */
+    color: solid black;
+}
+
+/* Workout Section */
+.disease-section-workout {
+    margin-top: 40px; /* Increase gap between Diet and Workout */
+
+}
+
+.disease-section-workout h5 {
+    margin-bottom: 5px; /* Reduce white space between h5 and ul */
+}
+
+.download-button {
+    background-color: #4CAF50; /* Green background */
+    border: none;
+    color: white; /* White text */
+    padding: 10px 20px; /* Padding */
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 10px 0;
+    cursor: pointer;
+    border-radius: 5px; /* Rounded corners */
+}
+
+.download-button:hover {
+    background-color: #45a049; /* Darker green on hover */
+}
+footer {
+    position: absolute;
     bottom: 0;
     left: 0;
     width: 100%;
-    background: transparent;
+    background: black; /* Change background if needed */
     color: burlywood;
     text-align: center;
     padding: 10px;
+    z-index: 4; /* Ensure footer is on top of everything */
 }
 
 footer p {
     margin: 5px 0;
     font-size: 14px;
+}
+.symptom-form {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 10px;
+}
+
+.symptom-categories {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr); /* 4 columns */
+    gap: 20px; /* Space between items */
+
+}
+
+.results {
+    color: black; /* Changes text color to black */
+}
+
+.symptom-category {
+    box-sizing: border-box;
+}
+
+.symptom-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px; /* Space between symptoms within the category */
+}
+
+.symptom-item {
+    display: flex;
+    align-items: center;
+}
+
+.submit-button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.submit-button:hover {
+    background-color: #45a049;
 }
