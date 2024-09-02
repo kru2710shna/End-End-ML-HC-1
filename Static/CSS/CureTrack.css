@@ -104,12 +104,13 @@ nav ul li a {
 .text__2 {
     position: relative;
     font-family: 'Times New Roman', serif;
-    color: solid black;
+    color: black;
     font-size: 34px;
     padding: 0;
     margin: 0;
+    left: 0;
     top: 139px;
-    width: 100vw; /* Adjust to viewport width */
+    width: 110vw; /* Adjust to viewport width */
     height: 200vh; /* Adjust to viewport height */
     background-image: url('../Images/pexels-tara-winstead-6694135.jpg');
     background-size: cover;
@@ -120,7 +121,7 @@ nav ul li a {
 .button {
     display: inline-block;
     padding: 0.5rem 1rem;
-    color: burlywood;
+    color: black;
     text-decoration: none;
     border: 2px solid brown;
     border-radius: 5px;
@@ -170,7 +171,6 @@ textarea:focus {
     border-color: darkbrown;
 }
 
-
 .vertical-line {
     border-left: 1px solid white;
     height: 52.5%;
@@ -210,6 +210,7 @@ textarea:focus {
     align-items: center;
     margin-top: 20px;
     z-index: 4; /* Ensure it's above other elements if needed */
+    color: black;
 }
 
 /* Style the input field */
