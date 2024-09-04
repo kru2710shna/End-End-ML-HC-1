@@ -5,6 +5,11 @@ from itertools import product
 import numpy as np
 import pytest
 
+from pandas.compat import (
+    is_ci_environment,
+    is_platform_windows,
+)
+
 from pandas import (
     NA,
     DataFrame,
@@ -29,13 +34,11 @@ from pandas.core.sorting import (
 @pytest.fixture
 def left_right():
     low, high, n = -1 << 10, 1 << 10, 1 << 20
-    left = DataFrame(
-        np.random.default_rng(2).integers(low, high, (n, 7)), columns=list("ABCDEFG")
-    )
+    left = DataFrame(np.random.randint(low, high, (n, 7)), columns=list("ABCDEFG"))
     left["left"] = left.sum(axis=1)
 
     # one-2-one match
-    i = np.random.default_rng(2).permutation(len(left))
+    i = np.random.permutation(len(left))
     right = left.iloc[i].copy()
     right.columns = right.columns[:-1].tolist() + ["right"]
     right.index = np.arange(len(right))
@@ -58,7 +61,7 @@ class TestSorting:
                 "F": B,
                 "G": A,
                 "H": B,
-                "values": np.random.default_rng(2).standard_normal(2500),
+                "values": np.random.randn(2500),
             }
         )
 
@@ -93,29 +96,32 @@ class TestSorting:
 
     @pytest.mark.parametrize("agg", ["mean", "median"])
     def test_int64_overflow_groupby_large_df_shuffled(self, agg):
-        rs = np.random.default_rng(2)
-        arr = rs.integers(-1 << 12, 1 << 12, (1 << 15, 5))
-        i = rs.choice(len(arr), len(arr) * 4)
+        arr = np.random.randint(-1 << 12, 1 << 12, (1 << 15, 5))
+        i = np.random.choice(len(arr), len(arr) * 4)
         arr = np.vstack((arr, arr[i]))  # add some duplicate rows
 
-        i = rs.permutation(len(arr))
+        i = np.random.permutation(len(arr))
         arr = arr[i]  # shuffle rows
 
         df = DataFrame(arr, columns=list("abcde"))
-        df["jim"], df["joe"] = np.zeros((2, len(df)))
+        df["jim"], df["joe"] = np.random.randn(2, len(df)) * 10
         gr = df.groupby(list("abcde"))
 
         # verify this is testing what it is supposed to test!
-        assert is_int64_overflow_possible(gr._grouper.shape)
+        assert is_int64_overflow_possible(gr.grouper.shape)
 
-        mi = MultiIndex.from_arrays(
-            [ar.ravel() for ar in np.array_split(np.unique(arr, axis=0), 5, axis=1)],
-            names=list("abcde"),
-        )
+        # manually compute groupings
+        jim, joe = defaultdict(list), defaultdict(list)
+        for key, a, b in zip(map(tuple, arr), df["jim"], df["joe"]):
+            jim[key].append(a)
+            joe[key].append(b)
 
-        res = DataFrame(
-            np.zeros((len(mi), 2)), columns=["jim", "joe"], index=mi
-        ).sort_index()
+        assert len(gr) == len(jim)
+        mi = MultiIndex.from_tuples(jim.keys(), names=list("abcde"))
+
+        f = lambda a: np.fromiter(map(getattr(np, agg), a), dtype="f8")
+        arr = np.vstack((f(jim.values()), f(joe.values()))).T
+        res = DataFrame(arr, columns=["jim", "joe"], index=mi).sort_index()
 
         tm.assert_frame_equal(getattr(gr, agg)(), res)
 
@@ -150,33 +156,61 @@ class TestSorting:
         tm.assert_numpy_array_equal(result, np.array(exp, dtype=np.intp))
 
     @pytest.mark.parametrize(
-        "ascending, na_position, exp",
+        "ascending, na_position, exp, box",
         [
             [
                 True,
                 "last",
                 list(range(5, 105)) + list(range(5)) + list(range(105, 110)),
+                list,
             ],
             [
                 True,
                 "first",
                 list(range(5)) + list(range(105, 110)) + list(range(5, 105)),
+                list,
             ],
             [
                 False,
                 "last",
                 list(range(104, 4, -1)) + list(range(5)) + list(range(105, 110)),
+                list,
             ],
             [
                 False,
                 "first",
                 list(range(5)) + list(range(105, 110)) + list(range(104, 4, -1)),
+                list,
+            ],
+            [
+                True,
+                "last",
+                list(range(5, 105)) + list(range(5)) + list(range(105, 110)),
+                lambda x: np.array(x, dtype="O"),
+            ],
+            [
+                True,
+                "first",
+                list(range(5)) + list(range(105, 110)) + list(range(5, 105)),
+                lambda x: np.array(x, dtype="O"),
+            ],
+            [
+                False,
+                "last",
+                list(range(104, 4, -1)) + list(range(5)) + list(range(105, 110)),
+                lambda x: np.array(x, dtype="O"),
+            ],
+            [
+                False,
+                "first",
+                list(range(5)) + list(range(105, 110)) + list(range(104, 4, -1)),
+                lambda x: np.array(x, dtype="O"),
             ],
         ],
     )
-    def test_nargsort(self, ascending, na_position, exp):
+    def test_nargsort(self, ascending, na_position, exp, box):
         # list places NaNs last, np.array(..., dtype="O") may not place NaNs first
-        items = np.array([np.nan] * 5 + list(range(100)) + [np.nan] * 5, dtype="O")
+        items = box([np.nan] * 5 + list(range(100)) + [np.nan] * 5)
 
         # mergesort is the most difficult to get right because we want it to be
         # stable.
@@ -195,14 +229,8 @@ class TestSorting:
 class TestMerge:
     def test_int64_overflow_outer_merge(self):
         # #2690, combinatorial explosion
-        df1 = DataFrame(
-            np.random.default_rng(2).standard_normal((1000, 7)),
-            columns=list("ABCDEF") + ["G1"],
-        )
-        df2 = DataFrame(
-            np.random.default_rng(3).standard_normal((1000, 7)),
-            columns=list("ABCDEF") + ["G2"],
-        )
+        df1 = DataFrame(np.random.randn(1000, 7), columns=list("ABCDEF") + ["G1"])
+        df2 = DataFrame(np.random.randn(1000, 7), columns=list("ABCDEF") + ["G2"])
         result = merge(df1, df2, how="outer")
         assert len(result) == 2000
 
@@ -245,7 +273,7 @@ class TestMerge:
         # one-2-many/none match
         low, high, n = -1 << 10, 1 << 10, 1 << 11
         left = DataFrame(
-            np.random.default_rng(2).integers(low, high, (n, 7)).astype("int64"),
+            np.random.randint(low, high, (n, 7)).astype("int64"),
             columns=list("ABCDEFG"),
         )
 
@@ -257,23 +285,23 @@ class TestMerge:
         left = concat([left, left], ignore_index=True)
 
         right = DataFrame(
-            np.random.default_rng(3).integers(low, high, (n // 2, 7)).astype("int64"),
+            np.random.randint(low, high, (n // 2, 7)).astype("int64"),
             columns=list("ABCDEFG"),
         )
 
         # add duplicates & overlap with left to the right frame
-        i = np.random.default_rng(4).choice(len(left), n)
+        i = np.random.choice(len(left), n)
         right = concat([right, right, left.iloc[i]], ignore_index=True)
 
-        left["left"] = np.random.default_rng(2).standard_normal(len(left))
-        right["right"] = np.random.default_rng(2).standard_normal(len(right))
+        left["left"] = np.random.randn(len(left))
+        right["right"] = np.random.randn(len(right))
 
         # shuffle left & right frames
-        i = np.random.default_rng(5).permutation(len(left))
+        i = np.random.permutation(len(left))
         left = left.iloc[i].copy()
         left.index = np.arange(len(left))
 
-        i = np.random.default_rng(6).permutation(len(right))
+        i = np.random.permutation(len(right))
         right = right.iloc[i].copy()
         right.index = np.arange(len(right))
 
@@ -300,14 +328,14 @@ class TestMerge:
 
         for k, rval in rdict.items():
             if k not in ldict:
-                vals.extend(
-                    k
-                    + (
-                        np.nan,
-                        rv,
+                for rv in rval:
+                    vals.append(
+                        k
+                        + (
+                            np.nan,
+                            rv,
+                        )
                     )
-                    for rv in rval
-                )
 
         def align(df):
             df = df.sort_values(df.columns.tolist())
@@ -373,50 +401,57 @@ class TestSafeSort:
         "arg, exp",
         [
             [[3, 1, 2, 0, 4], [0, 1, 2, 3, 4]],
-            [
-                np.array(list("baaacb"), dtype=object),
-                np.array(list("aaabbc"), dtype=object),
-            ],
+            [list("baaacb"), np.array(list("aaabbc"), dtype=object)],
             [[], []],
         ],
     )
     def test_basic_sort(self, arg, exp):
-        result = safe_sort(np.array(arg))
+        result = safe_sort(arg)
         expected = np.array(exp)
         tm.assert_numpy_array_equal(result, expected)
 
     @pytest.mark.parametrize("verify", [True, False])
     @pytest.mark.parametrize(
-        "codes, exp_codes",
+        "codes, exp_codes, na_sentinel",
         [
-            [[0, 1, 1, 2, 3, 0, -1, 4], [3, 1, 1, 2, 0, 3, -1, 4]],
-            [[], []],
+            [[0, 1, 1, 2, 3, 0, -1, 4], [3, 1, 1, 2, 0, 3, -1, 4], -1],
+            [[0, 1, 1, 2, 3, 0, 99, 4], [3, 1, 1, 2, 0, 3, 99, 4], 99],
+            [[], [], -1],
         ],
     )
-    def test_codes(self, verify, codes, exp_codes):
-        values = np.array([3, 1, 2, 0, 4])
+    def test_codes(self, verify, codes, exp_codes, na_sentinel):
+        values = [3, 1, 2, 0, 4]
         expected = np.array([0, 1, 2, 3, 4])
 
         result, result_codes = safe_sort(
-            values, codes, use_na_sentinel=True, verify=verify
+            values, codes, na_sentinel=na_sentinel, verify=verify
         )
         expected_codes = np.array(exp_codes, dtype=np.intp)
         tm.assert_numpy_array_equal(result, expected)
         tm.assert_numpy_array_equal(result_codes, expected_codes)
 
-    def test_codes_out_of_bound(self):
-        values = np.array([3, 1, 2, 0, 4])
+    @pytest.mark.skipif(
+        is_platform_windows() and is_ci_environment(),
+        reason="In CI environment can crash thread with: "
+        "Windows fatal exception: access violation",
+    )
+    @pytest.mark.parametrize("na_sentinel", [-1, 99])
+    def test_codes_out_of_bound(self, na_sentinel):
+        values = [3, 1, 2, 0, 4]
         expected = np.array([0, 1, 2, 3, 4])
 
         # out of bound indices
         codes = [0, 101, 102, 2, 3, 0, 99, 4]
-        result, result_codes = safe_sort(values, codes, use_na_sentinel=True)
-        expected_codes = np.array([3, -1, -1, 2, 0, 3, -1, 4], dtype=np.intp)
+        result, result_codes = safe_sort(values, codes, na_sentinel=na_sentinel)
+        expected_codes = np.array(
+            [3, na_sentinel, na_sentinel, 2, 0, 3, na_sentinel, 4], dtype=np.intp
+        )
         tm.assert_numpy_array_equal(result, expected)
         tm.assert_numpy_array_equal(result_codes, expected_codes)
 
-    def test_mixed_integer(self):
-        values = np.array(["b", 1, 0, "a", 0, "b"], dtype=object)
+    @pytest.mark.parametrize("box", [lambda x: np.array(x, dtype=object), list])
+    def test_mixed_integer(self, box):
+        values = box(["b", 1, 0, "a", 0, "b"])
         result = safe_sort(values)
         expected = np.array([0, 0, 1, "a", "b", "b"], dtype=object)
         tm.assert_numpy_array_equal(result, expected)
@@ -440,9 +475,9 @@ class TestSafeSort:
     @pytest.mark.parametrize(
         "arg, codes, err, msg",
         [
-            [1, None, TypeError, "Only np.ndarray, ExtensionArray, and Index"],
-            [np.array([0, 1, 2]), 1, TypeError, "Only list-like objects or None"],
-            [np.array([0, 1, 2, 1]), [0, 1], ValueError, "values should be unique"],
+            [1, None, TypeError, "Only list-like objects are allowed"],
+            [[0, 1, 2], 1, TypeError, "Only list-like objects or None"],
+            [[0, 1, 2, 1], [0, 1], ValueError, "values should be unique"],
         ],
     )
     def test_exceptions(self, arg, codes, err, msg):
@@ -459,19 +494,22 @@ class TestSafeSort:
         tm.assert_extension_array_equal(result, expected)
 
     @pytest.mark.parametrize("verify", [True, False])
-    def test_extension_array_codes(self, verify):
+    @pytest.mark.parametrize("na_sentinel", [-1, 99])
+    def test_extension_array_codes(self, verify, na_sentinel):
         a = array([1, 3, 2], dtype="Int64")
-        result, codes = safe_sort(a, [0, 1, -1, 2], use_na_sentinel=True, verify=verify)
+        result, codes = safe_sort(
+            a, [0, 1, na_sentinel, 2], na_sentinel=na_sentinel, verify=verify
+        )
         expected_values = array([1, 2, 3], dtype="Int64")
-        expected_codes = np.array([0, 2, -1, 1], dtype=np.intp)
+        expected_codes = np.array([0, 2, na_sentinel, 1], dtype=np.intp)
         tm.assert_extension_array_equal(result, expected_values)
         tm.assert_numpy_array_equal(codes, expected_codes)
 
 
-def test_mixed_str_null(nulls_fixture):
-    values = np.array(["b", nulls_fixture, "a", "b"], dtype=object)
+def test_mixed_str_nan():
+    values = np.array(["b", np.nan, "a", "b"], dtype=object)
     result = safe_sort(values)
-    expected = np.array(["a", "b", "b", nulls_fixture], dtype=object)
+    expected = np.array([np.nan, "a", "b", "b"], dtype=object)
     tm.assert_numpy_array_equal(result, expected)
 
 

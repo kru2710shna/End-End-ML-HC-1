@@ -2,15 +2,10 @@
 from __future__ import annotations
 
 import ast
-from decimal import (
-    Decimal,
-    InvalidOperation,
-)
 from functools import partial
 from typing import (
     TYPE_CHECKING,
     Any,
-    ClassVar,
 )
 
 import numpy as np
@@ -19,6 +14,7 @@ from pandas._libs.tslibs import (
     Timedelta,
     Timestamp,
 )
+from pandas._typing import npt
 from pandas.errors import UndefinedVariableError
 
 from pandas.core.dtypes.common import is_list_like
@@ -41,10 +37,7 @@ from pandas.io.formats.printing import (
 )
 
 if TYPE_CHECKING:
-    from pandas._typing import (
-        Self,
-        npt,
-    )
+    from pandas.compat.chainmap import DeepChainMap
 
 
 class PyTablesScope(_scope.Scope):
@@ -97,15 +90,16 @@ class Term(ops.Term):
 
 
 class Constant(Term):
-    def __init__(self, name, env: PyTablesScope, side=None, encoding=None) -> None:
+    def __init__(self, value, env: PyTablesScope, side=None, encoding=None) -> None:
         assert isinstance(env, PyTablesScope), type(env)
-        super().__init__(name, env, side=side, encoding=encoding)
+        super().__init__(value, env, side=side, encoding=encoding)
 
     def _resolve_name(self):
         return self._name
 
 
 class BinOp(ops.BinOp):
+
     _max_selectors = 31
 
     op: str
@@ -118,7 +112,7 @@ class BinOp(ops.BinOp):
         self.encoding = encoding
         self.condition = None
 
-    def _disallow_scalar_only_bool_ops(self) -> None:
+    def _disallow_scalar_only_bool_ops(self):
         pass
 
     def prune(self, klass):
@@ -217,20 +211,19 @@ class BinOp(ops.BinOp):
 
         kind = ensure_decoded(self.kind)
         meta = ensure_decoded(self.meta)
-        if kind == "datetime" or (kind and kind.startswith("datetime64")):
+        if kind == "datetime64" or kind == "datetime":
             if isinstance(v, (int, float)):
                 v = stringify(v)
             v = ensure_decoded(v)
-            v = Timestamp(v).as_unit("ns")
+            v = Timestamp(v)
             if v.tz is not None:
                 v = v.tz_convert("UTC")
-            return TermValue(v, v._value, kind)
-        elif kind in ("timedelta64", "timedelta"):
+            return TermValue(v, v.value, kind)
+        elif kind == "timedelta64" or kind == "timedelta":
             if isinstance(v, str):
-                v = Timedelta(v)
+                v = Timedelta(v).value
             else:
-                v = Timedelta(v, unit="s")
-            v = v.as_unit("ns")._value
+                v = Timedelta(v, unit="s").value
             return TermValue(int(v), v, kind)
         elif meta == "category":
             metadata = extract_array(self.metadata, extract_numpy=True)
@@ -241,21 +234,14 @@ class BinOp(ops.BinOp):
                 result = metadata.searchsorted(v, side="left")
             return TermValue(result, result, "integer")
         elif kind == "integer":
-            try:
-                v_dec = Decimal(v)
-            except InvalidOperation:
-                # GH 54186
-                # convert v to float to raise float's ValueError
-                float(v)
-            else:
-                v = int(v_dec.to_integral_exact(rounding="ROUND_HALF_EVEN"))
+            v = int(float(v))
             return TermValue(v, v, kind)
         elif kind == "float":
             v = float(v)
             return TermValue(v, v, kind)
         elif kind == "bool":
             if isinstance(v, str):
-                v = v.strip().lower() not in [
+                v = not v.strip().lower() in [
                     "false",
                     "f",
                     "no",
@@ -275,7 +261,7 @@ class BinOp(ops.BinOp):
         else:
             raise TypeError(f"Cannot compare {v} of type {type(v)} to {kind} column")
 
-    def convert_values(self) -> None:
+    def convert_values(self):
         pass
 
 
@@ -287,7 +273,7 @@ class FilterBinOp(BinOp):
             return "Filter: Not Initialized"
         return pprint_thing(f"[Filter : [{self.filter[0]}] -> [{self.filter[1]}]")
 
-    def invert(self) -> Self:
+    def invert(self):
         """invert the filter"""
         if self.filter is not None:
             self.filter = (
@@ -301,8 +287,8 @@ class FilterBinOp(BinOp):
         """return the actual filter format"""
         return [self.filter]
 
-    # error: Signature of "evaluate" incompatible with supertype "BinOp"
-    def evaluate(self) -> Self | None:  # type: ignore[override]
+    def evaluate(self):
+
         if not self.is_valid:
             raise ValueError(f"query term is not valid [{self}]")
 
@@ -310,8 +296,10 @@ class FilterBinOp(BinOp):
         values = list(rhs)
 
         if self.is_in_table:
+
             # if too many values to create the expression, use a filter instead
             if self.op in ["==", "!="] and len(values) > self._max_selectors:
+
                 filter_op = self.generate_filter_op()
                 self.filter = (self.lhs, filter_op, Index(values))
 
@@ -320,6 +308,7 @@ class FilterBinOp(BinOp):
 
         # equality conditions
         if self.op in ["==", "!="]:
+
             filter_op = self.generate_filter_op()
             self.filter = (self.lhs, filter_op, Index(values))
 
@@ -341,8 +330,7 @@ class JointFilterBinOp(FilterBinOp):
     def format(self):
         raise NotImplementedError("unable to collapse Joint Filters")
 
-    # error: Signature of "evaluate" incompatible with supertype "BinOp"
-    def evaluate(self) -> Self:  # type: ignore[override]
+    def evaluate(self):
         return self
 
 
@@ -363,8 +351,8 @@ class ConditionBinOp(BinOp):
         """return the actual ne format"""
         return self.condition
 
-    # error: Signature of "evaluate" incompatible with supertype "BinOp"
-    def evaluate(self) -> Self | None:  # type: ignore[override]
+    def evaluate(self):
+
         if not self.is_valid:
             raise ValueError(f"query term is not valid [{self}]")
 
@@ -377,6 +365,7 @@ class ConditionBinOp(BinOp):
 
         # equality conditions
         if self.op in ["==", "!="]:
+
             # too many values to create the expression?
             if len(values) <= self._max_selectors:
                 vs = [self.generate(v) for v in values]
@@ -392,14 +381,14 @@ class ConditionBinOp(BinOp):
 
 
 class JointConditionBinOp(ConditionBinOp):
-    # error: Signature of "evaluate" incompatible with supertype "BinOp"
-    def evaluate(self) -> Self:  # type: ignore[override]
+    def evaluate(self):
         self.condition = f"({self.lhs.condition} {self.op} {self.rhs.condition})"
         return self
 
 
 class UnaryOp(ops.UnaryOp):
     def prune(self, klass):
+
         if self.op != "~":
             raise NotImplementedError("UnaryOp only support invert type ops")
 
@@ -418,8 +407,8 @@ class UnaryOp(ops.UnaryOp):
 
 
 class PyTablesExprVisitor(BaseExprVisitor):
-    const_type: ClassVar[type[ops.Term]] = Constant
-    term_type: ClassVar[type[Term]] = Term
+    const_type = Constant
+    term_type = Term
 
     def __init__(self, env, engine, parser, **kwargs) -> None:
         super().__init__(env, engine, parser)
@@ -431,15 +420,13 @@ class PyTablesExprVisitor(BaseExprVisitor):
                 lambda node, bin_op=bin_op: partial(BinOp, bin_op, **kwargs),
             )
 
-    def visit_UnaryOp(self, node, **kwargs) -> ops.Term | UnaryOp | None:
+    def visit_UnaryOp(self, node, **kwargs):
         if isinstance(node.op, (ast.Not, ast.Invert)):
             return UnaryOp("~", self.visit(node.operand))
         elif isinstance(node.op, ast.USub):
             return self.const_type(-self.visit(node.operand).value, self.env)
         elif isinstance(node.op, ast.UAdd):
             raise NotImplementedError("Unary addition not supported")
-        # TODO: return None might never be reached
-        return None
 
     def visit_Index(self, node, **kwargs):
         return self.visit(node.value).value
@@ -450,7 +437,7 @@ class PyTablesExprVisitor(BaseExprVisitor):
         )
         return self.visit(cmpr)
 
-    def visit_Subscript(self, node, **kwargs) -> ops.Term:
+    def visit_Subscript(self, node, **kwargs):
         # only allow simple subscripts
 
         value = self.visit(node.value)
@@ -483,12 +470,13 @@ class PyTablesExprVisitor(BaseExprVisitor):
             # try to get the value to see if we are another expression
             try:
                 resolved = resolved.value
-            except AttributeError:
+            except (AttributeError):
                 pass
 
             try:
                 return self.term_type(getattr(resolved, attr), self.env)
             except AttributeError:
+
                 # something like datetime.datetime where scope is overridden
                 if isinstance(value, ast.Name) and value.id == attr:
                     return resolved
@@ -568,6 +556,7 @@ class PyTablesExpr(expr.Expr):
         encoding=None,
         scope_level: int = 0,
     ) -> None:
+
         where = _validate_where(where)
 
         self.encoding = encoding
@@ -577,7 +566,7 @@ class PyTablesExpr(expr.Expr):
         self._visitor = None
 
         # capture the environment if needed
-        local_dict: _scope.DeepChainMap[Any, Any] | None = None
+        local_dict: DeepChainMap[Any, Any] | None = None
 
         if isinstance(where, PyTablesExpr):
             local_dict = where.env.scope
@@ -589,7 +578,8 @@ class PyTablesExpr(expr.Expr):
                 if isinstance(w, PyTablesExpr):
                     local_dict = w.env.scope
                 else:
-                    where[idx] = _validate_where(w)
+                    w = _validate_where(w)
+                    where[idx] = w
             _where = " & ".join([f"({w})" for w in com.flatten(where)])
         else:
             # _validate_where ensures we otherwise have a string
@@ -660,7 +650,7 @@ def maybe_expression(s) -> bool:
     """loose checking if s is a pytables-acceptable expression"""
     if not isinstance(s, str):
         return False
-    operations = PyTablesExprVisitor.binary_ops + PyTablesExprVisitor.unary_ops + ("=",)
+    ops = PyTablesExprVisitor.binary_ops + PyTablesExprVisitor.unary_ops + ("=",)
 
     # make sure we have an op at least
-    return any(op in s for op in operations)
+    return any(op in s for op in ops)

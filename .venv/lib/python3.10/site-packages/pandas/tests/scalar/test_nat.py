@@ -9,7 +9,8 @@ import pytest
 import pytz
 
 from pandas._libs.tslibs import iNaT
-from pandas.compat.numpy import np_version_gte1p24p3
+
+from pandas.core.dtypes.common import is_datetime64_any_dtype
 
 from pandas import (
     DatetimeIndex,
@@ -25,23 +26,12 @@ from pandas import (
     offsets,
 )
 import pandas._testing as tm
-from pandas.core import roperator
 from pandas.core.arrays import (
     DatetimeArray,
     PeriodArray,
     TimedeltaArray,
 )
-
-
-class TestNaTFormatting:
-    def test_repr(self):
-        assert repr(NaT) == "NaT"
-
-    def test_str(self):
-        assert str(NaT) == "NaT"
-
-    def test_isoformat(self):
-        assert NaT.isoformat() == "NaT"
+from pandas.core.ops import roperator
 
 
 @pytest.mark.parametrize(
@@ -53,6 +43,7 @@ class TestNaTFormatting:
     ],
 )
 def test_nat_fields(nat, idx):
+
     for field in idx._field_ops:
         # weekday is a property of DTI, but a method
         # on NaT/Timestamp for compat with datetime
@@ -66,6 +57,7 @@ def test_nat_fields(nat, idx):
         assert np.isnan(result)
 
     for field in idx._bool_ops:
+
         result = getattr(NaT, field)
         assert result is False
 
@@ -81,6 +73,9 @@ def test_nat_vector_field_access():
         # on NaT/Timestamp for compat with datetime
         if field == "weekday":
             continue
+        if field in ["week", "weekofyear"]:
+            # GH#33595 Deprecate week and weekofyear
+            continue
 
         result = getattr(idx, field)
         expected = Index([getattr(x, field) for x in idx])
@@ -92,6 +87,9 @@ def test_nat_vector_field_access():
         # weekday is a property of DTI, but a method
         # on NaT/Timestamp for compat with datetime
         if field == "weekday":
+            continue
+        if field in ["week", "weekofyear"]:
+            # GH#33595 Deprecate week and weekofyear
             continue
 
         result = getattr(ser.dt, field)
@@ -105,11 +103,20 @@ def test_nat_vector_field_access():
 
 
 @pytest.mark.parametrize("klass", [Timestamp, Timedelta, Period])
-@pytest.mark.parametrize(
-    "value", [None, np.nan, iNaT, float("nan"), NaT, "NaT", "nat", "", "NAT"]
-)
+@pytest.mark.parametrize("value", [None, np.nan, iNaT, float("nan"), NaT, "NaT", "nat"])
 def test_identity(klass, value):
     assert klass(value) is NaT
+
+
+@pytest.mark.parametrize("klass", [Timestamp, Timedelta, Period])
+@pytest.mark.parametrize("value", ["", "nat", "NAT", None, np.nan])
+def test_equality(klass, value, request):
+    if klass is Period and value == "":
+        request.node.add_marker(
+            pytest.mark.xfail(reason="Period cannot parse empty string")
+        )
+
+    assert klass(value).value == iNaT
 
 
 @pytest.mark.parametrize("klass", [Timestamp, Timedelta])
@@ -183,15 +190,16 @@ def test_nat_iso_format(get_nat):
 @pytest.mark.parametrize(
     "klass,expected",
     [
-        (Timestamp, ["normalize", "to_julian_date", "to_period", "unit"]),
+        (Timestamp, ["freqstr", "normalize", "to_julian_date", "to_period"]),
         (
             Timedelta,
             [
                 "components",
+                "delta",
+                "is_populated",
                 "resolution_string",
                 "to_pytimedelta",
                 "to_timedelta64",
-                "unit",
                 "view",
             ],
         ),
@@ -254,7 +262,6 @@ def _get_overlap_public_nat_methods(klass, as_tuple=False):
         (
             Timestamp,
             [
-                "as_unit",
                 "astimezone",
                 "ceil",
                 "combine",
@@ -322,15 +329,14 @@ def test_nat_doc_strings(compare):
     klass, method = compare
     klass_doc = getattr(klass, method).__doc__
 
+    # Ignore differences with Timestamp.isoformat() as they're intentional
     if klass == Timestamp and method == "isoformat":
-        pytest.skip(
-            "Ignore differences with Timestamp.isoformat() as they're intentional"
-        )
+        return
 
     if method == "to_numpy":
         # GH#44460 can return either dt64 or td64 depending on dtype,
         #  different docstring is intentional
-        pytest.skip(f"different docstring for {method} is intentional")
+        return
 
     nat_doc = getattr(NaT, method).__doc__
     assert klass_doc == nat_doc
@@ -442,7 +448,7 @@ def test_nat_rfloordiv_timedelta(val, expected):
     [
         DatetimeIndex(["2011-01-01", "2011-01-02"], name="x"),
         DatetimeIndex(["2011-01-01", "2011-01-02"], tz="US/Eastern", name="x"),
-        DatetimeArray._from_sequence(["2011-01-01", "2011-01-02"], dtype="M8[ns]"),
+        DatetimeArray._from_sequence(["2011-01-01", "2011-01-02"]),
         DatetimeArray._from_sequence(
             ["2011-01-01", "2011-01-02"], dtype=DatetimeTZDtype(tz="US/Pacific")
         ),
@@ -454,11 +460,10 @@ def test_nat_arithmetic_index(op_name, value):
     exp_name = "x"
     exp_data = [NaT] * 2
 
-    if value.dtype.kind == "M" and "plus" in op_name:
+    if is_datetime64_any_dtype(value.dtype) and "plus" in op_name:
         expected = DatetimeIndex(exp_data, tz=value.tz, name=exp_name)
     else:
         expected = TimedeltaIndex(exp_data, name=exp_name)
-    expected = expected.as_unit(value.unit)
 
     if not isinstance(value, Index):
         expected = expected.array
@@ -504,7 +509,7 @@ def test_nat_arithmetic_ndarray(dtype, op, out_dtype):
 
 def test_nat_pinned_docstrings():
     # see gh-17327
-    assert NaT.ctime.__doc__ == Timestamp.ctime.__doc__
+    assert NaT.ctime.__doc__ == datetime.ctime.__doc__
 
 
 def test_to_numpy_alias():
@@ -539,10 +544,7 @@ def test_to_numpy_alias():
         pytest.param(
             Timedelta(0).to_timedelta64(),
             marks=pytest.mark.xfail(
-                not np_version_gte1p24p3,
-                reason="td64 doesn't return NotImplemented, see numpy#17017",
-                # When this xfail is fixed, test_nat_comparisons_numpy
-                #  can be removed.
+                reason="td64 doesn't return NotImplemented, see numpy#17017"
             ),
         ),
         Timestamp(0),
@@ -550,8 +552,7 @@ def test_to_numpy_alias():
         pytest.param(
             Timestamp(0).to_datetime64(),
             marks=pytest.mark.xfail(
-                not np_version_gte1p24p3,
-                reason="dt64 doesn't return NotImplemented, see numpy#17017",
+                reason="dt64 doesn't return NotImplemented, see numpy#17017"
             ),
         ),
         Timestamp(0).tz_localize("UTC"),
@@ -653,19 +654,32 @@ def test_compare_date(fixed_now_ts):
 
     dt = fixed_now_ts.to_pydatetime().date()
 
-    msg = "Cannot compare NaT with datetime.date object"
     for left, right in [(NaT, dt), (dt, NaT)]:
         assert not left == right
         assert left != right
 
-        with pytest.raises(TypeError, match=msg):
-            left < right
-        with pytest.raises(TypeError, match=msg):
-            left <= right
-        with pytest.raises(TypeError, match=msg):
-            left > right
-        with pytest.raises(TypeError, match=msg):
-            left >= right
+        with tm.assert_produces_warning(FutureWarning):
+            assert not left < right
+        with tm.assert_produces_warning(FutureWarning):
+            assert not left <= right
+        with tm.assert_produces_warning(FutureWarning):
+            assert not left > right
+        with tm.assert_produces_warning(FutureWarning):
+            assert not left >= right
+
+    # Once the deprecation is enforced, the following assertions
+    #  can be enabled:
+    #    assert not left == right
+    #    assert left != right
+    #
+    #    with pytest.raises(TypeError):
+    #        left < right
+    #    with pytest.raises(TypeError):
+    #        left <= right
+    #    with pytest.raises(TypeError):
+    #        left > right
+    #    with pytest.raises(TypeError):
+    #        left >= right
 
 
 @pytest.mark.parametrize(
@@ -707,3 +721,8 @@ def test_pickle():
     # GH#4606
     p = tm.round_trip_pickle(NaT)
     assert p is NaT
+
+
+def test_freq_deprecated():
+    with tm.assert_produces_warning(FutureWarning, match="deprecated"):
+        NaT.freq

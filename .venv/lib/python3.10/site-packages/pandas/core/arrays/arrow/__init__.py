@@ -1,7 +1,4 @@
-from pandas.core.arrays.arrow.accessors import (
-    ListAccessor,
-    StructAccessor,
-)
 from pandas.core.arrays.arrow.array import ArrowExtensionArray
+from pandas.core.arrays.arrow.dtype import ArrowDtype
 
-__all__ = ["ArrowExtensionArray", "StructAccessor", "ListAccessor"]
+__all__ = ["ArrowDtype", "ArrowExtensionArray"]

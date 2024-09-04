@@ -5,64 +5,36 @@ inherit from this class.
 from __future__ import annotations
 
 from typing import (
-    TYPE_CHECKING,
-    Any,
     Literal,
-    cast,
+    TypeVar,
     final,
 )
 
 import numpy as np
 
-from pandas._config import (
-    using_copy_on_write,
-    warn_copy_on_write,
-)
-
-from pandas._libs import (
-    algos as libalgos,
-    lib,
+from pandas._typing import (
+    ArrayLike,
+    DtypeObj,
+    Shape,
 )
 from pandas.errors import AbstractMethodError
-from pandas.util._validators import validate_bool_kwarg
 
 from pandas.core.dtypes.cast import (
     find_common_type,
     np_can_hold_element,
 )
-from pandas.core.dtypes.dtypes import (
-    ExtensionDtype,
-    SparseDtype,
-)
 
 from pandas.core.base import PandasObject
-from pandas.core.construction import extract_array
 from pandas.core.indexes.api import (
     Index,
     default_index,
 )
 
-if TYPE_CHECKING:
-    from pandas._typing import (
-        ArrayLike,
-        AxisInt,
-        DtypeObj,
-        Self,
-        Shape,
-    )
-
-
-class _AlreadyWarned:
-    def __init__(self):
-        # This class is used on the manager level to the block level to
-        # ensure that we warn only once. The block method can update the
-        # warned_already option without returning a value to keep the
-        # interface consistent. This is only a temporary solution for
-        # CoW warnings.
-        self.warned_already = False
+T = TypeVar("T", bound="DataManager")
 
 
 class DataManager(PandasObject):
+
     # TODO share more methods/attributes
 
     axes: list[Index]
@@ -84,7 +56,7 @@ class DataManager(PandasObject):
         return tuple(len(ax) for ax in self.axes)
 
     @final
-    def _validate_set_axis(self, axis: AxisInt, new_labels: Index) -> None:
+    def _validate_set_axis(self, axis: int, new_labels: Index) -> None:
         # Caller is responsible for ensuring we have an Index object.
         old_len = len(self.axes[axis])
         new_len = len(new_labels)
@@ -101,25 +73,25 @@ class DataManager(PandasObject):
             )
 
     def reindex_indexer(
-        self,
+        self: T,
         new_axis,
         indexer,
-        axis: AxisInt,
+        axis: int,
         fill_value=None,
         allow_dups: bool = False,
         copy: bool = True,
         only_slice: bool = False,
-    ) -> Self:
+    ) -> T:
         raise AbstractMethodError(self)
 
     @final
     def reindex_axis(
-        self,
+        self: T,
         new_index: Index,
-        axis: AxisInt,
+        axis: int,
         fill_value=None,
         only_slice: bool = False,
-    ) -> Self:
+    ) -> T:
         """
         Conform data manager to new index.
         """
@@ -134,7 +106,7 @@ class DataManager(PandasObject):
             only_slice=only_slice,
         )
 
-    def _equal_values(self, other: Self) -> bool:
+    def _equal_values(self: T, other: T) -> bool:
         """
         To be implemented by the subclasses. Only check the column values
         assuming shape and indexes have already been checked.
@@ -146,7 +118,7 @@ class DataManager(PandasObject):
         """
         Implementation for DataFrame.equals
         """
-        if not isinstance(other, type(self)):
+        if not isinstance(other, DataManager):
             return False
 
         self_axes, other_axes = self.axes, other.axes
@@ -158,158 +130,17 @@ class DataManager(PandasObject):
         return self._equal_values(other)
 
     def apply(
-        self,
+        self: T,
         f,
         align_keys: list[str] | None = None,
+        ignore_failures: bool = False,
         **kwargs,
-    ) -> Self:
-        raise AbstractMethodError(self)
-
-    def apply_with_block(
-        self,
-        f,
-        align_keys: list[str] | None = None,
-        **kwargs,
-    ) -> Self:
+    ) -> T:
         raise AbstractMethodError(self)
 
     @final
-    def isna(self, func) -> Self:
+    def isna(self: T, func) -> T:
         return self.apply("apply", func=func)
-
-    @final
-    def fillna(self, value, limit: int | None, inplace: bool, downcast) -> Self:
-        if limit is not None:
-            # Do this validation even if we go through one of the no-op paths
-            limit = libalgos.validate_limit(None, limit=limit)
-
-        return self.apply_with_block(
-            "fillna",
-            value=value,
-            limit=limit,
-            inplace=inplace,
-            downcast=downcast,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-
-    @final
-    def where(self, other, cond, align: bool) -> Self:
-        if align:
-            align_keys = ["other", "cond"]
-        else:
-            align_keys = ["cond"]
-            other = extract_array(other, extract_numpy=True)
-
-        return self.apply_with_block(
-            "where",
-            align_keys=align_keys,
-            other=other,
-            cond=cond,
-            using_cow=using_copy_on_write(),
-        )
-
-    @final
-    def putmask(self, mask, new, align: bool = True, warn: bool = True) -> Self:
-        if align:
-            align_keys = ["new", "mask"]
-        else:
-            align_keys = ["mask"]
-            new = extract_array(new, extract_numpy=True)
-
-        already_warned = None
-        if warn_copy_on_write():
-            already_warned = _AlreadyWarned()
-            if not warn:
-                already_warned.warned_already = True
-
-        return self.apply_with_block(
-            "putmask",
-            align_keys=align_keys,
-            mask=mask,
-            new=new,
-            using_cow=using_copy_on_write(),
-            already_warned=already_warned,
-        )
-
-    @final
-    def round(self, decimals: int, using_cow: bool = False) -> Self:
-        return self.apply_with_block(
-            "round",
-            decimals=decimals,
-            using_cow=using_cow,
-        )
-
-    @final
-    def replace(self, to_replace, value, inplace: bool) -> Self:
-        inplace = validate_bool_kwarg(inplace, "inplace")
-        # NDFrame.replace ensures the not-is_list_likes here
-        assert not lib.is_list_like(to_replace)
-        assert not lib.is_list_like(value)
-        return self.apply_with_block(
-            "replace",
-            to_replace=to_replace,
-            value=value,
-            inplace=inplace,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-
-    @final
-    def replace_regex(self, **kwargs) -> Self:
-        return self.apply_with_block(
-            "_replace_regex",
-            **kwargs,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-
-    @final
-    def replace_list(
-        self,
-        src_list: list[Any],
-        dest_list: list[Any],
-        inplace: bool = False,
-        regex: bool = False,
-    ) -> Self:
-        """do a list replace"""
-        inplace = validate_bool_kwarg(inplace, "inplace")
-
-        bm = self.apply_with_block(
-            "replace_list",
-            src_list=src_list,
-            dest_list=dest_list,
-            inplace=inplace,
-            regex=regex,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-        bm._consolidate_inplace()
-        return bm
-
-    def interpolate(self, inplace: bool, **kwargs) -> Self:
-        return self.apply_with_block(
-            "interpolate",
-            inplace=inplace,
-            **kwargs,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-
-    def pad_or_backfill(self, inplace: bool, **kwargs) -> Self:
-        return self.apply_with_block(
-            "pad_or_backfill",
-            inplace=inplace,
-            **kwargs,
-            using_cow=using_copy_on_write(),
-            already_warned=_AlreadyWarned(),
-        )
-
-    def shift(self, periods: int, fill_value) -> Self:
-        if fill_value is lib.no_default:
-            fill_value = None
-
-        return self.apply_with_block("shift", periods=periods, fill_value=fill_value)
 
     # --------------------------------------------------------------------
     # Consolidation: No-ops for all but BlockManager
@@ -317,7 +148,7 @@ class DataManager(PandasObject):
     def is_consolidated(self) -> bool:
         return True
 
-    def consolidate(self) -> Self:
+    def consolidate(self: T) -> T:
         return self
 
     def _consolidate_inplace(self) -> None:
@@ -338,7 +169,7 @@ class SingleDataManager(DataManager):
         # error: "SingleDataManager" has no attribute "arrays"; maybe "array"
         return self.arrays[0]  # type: ignore[attr-defined]
 
-    def setitem_inplace(self, indexer, value, warn: bool = True) -> None:
+    def setitem_inplace(self, indexer, value) -> None:
         """
         Set values with indexer.
 
@@ -356,13 +187,14 @@ class SingleDataManager(DataManager):
             #  dt64/td64, which do their own validation.
             value = np_can_hold_element(arr.dtype, value)
 
-        if isinstance(value, np.ndarray) and value.ndim == 1 and len(value) == 1:
-            # NumPy 1.25 deprecation: https://github.com/numpy/numpy/pull/10615
-            value = value[0, ...]
-
         arr[indexer] = value
 
-    def grouped_reduce(self, func):
+    def grouped_reduce(self, func, ignore_failures: bool = False):
+        """
+        ignore_failures : bool, default False
+            Not used; for compatibility with ArrayManager/BlockManager.
+        """
+
         arr = self.array
         res = func(arr)
         index = default_index(len(res))
@@ -392,16 +224,3 @@ def interleaved_dtype(dtypes: list[DtypeObj]) -> DtypeObj | None:
         return None
 
     return find_common_type(dtypes)
-
-
-def ensure_np_dtype(dtype: DtypeObj) -> np.dtype:
-    # TODO: https://github.com/pandas-dev/pandas/issues/22791
-    # Give EAs some input on what happens here. Sparse needs this.
-    if isinstance(dtype, SparseDtype):
-        dtype = dtype.subtype
-        dtype = cast(np.dtype, dtype)
-    elif isinstance(dtype, ExtensionDtype):
-        dtype = np.dtype("object")
-    elif dtype == np.dtype(str):
-        dtype = np.dtype("object")
-    return dtype

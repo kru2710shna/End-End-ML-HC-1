@@ -11,7 +11,6 @@ from pandas import (
     IntervalIndex,
     NaT,
     Series,
-    Timedelta,
     TimedeltaIndex,
     Timestamp,
     cut,
@@ -21,13 +20,16 @@ from pandas import (
     timedelta_range,
 )
 import pandas._testing as tm
-from pandas.api.types import CategoricalDtype
+from pandas.api.types import CategoricalDtype as CDT
 
-from pandas.tseries.offsets import Day
+from pandas.tseries.offsets import (
+    Day,
+    Nano,
+)
 
 
 def test_qcut():
-    arr = np.random.default_rng(2).standard_normal(1000)
+    arr = np.random.randn(1000)
 
     # We store the bins as Index that have been
     # rounded to comparisons are a bit tricky.
@@ -45,14 +47,14 @@ def test_qcut():
 
 
 def test_qcut_bounds():
-    arr = np.random.default_rng(2).standard_normal(1000)
+    arr = np.random.randn(1000)
 
     factor = qcut(arr, 10, labels=False)
     assert len(np.unique(factor)) == 10
 
 
 def test_qcut_specify_quantiles():
-    arr = np.random.default_rng(2).standard_normal(100)
+    arr = np.random.randn(100)
     factor = qcut(arr, [0, 0.25, 0.5, 0.75, 1.0])
 
     expected = qcut(arr, 4)
@@ -80,7 +82,7 @@ def test_qcut_include_lowest():
 
 
 def test_qcut_nas():
-    arr = np.random.default_rng(2).standard_normal(100)
+    arr = np.random.randn(100)
     arr[:20] = np.nan
 
     result = qcut(arr, 4)
@@ -127,9 +129,7 @@ def test_qcut_return_intervals():
     exp_levels = np.array(
         [Interval(-0.001, 2.664), Interval(2.664, 5.328), Interval(5.328, 8)]
     )
-    exp = Series(exp_levels.take([0, 0, 0, 1, 1, 1, 2, 2, 2])).astype(
-        CategoricalDtype(ordered=True)
-    )
+    exp = Series(exp_levels.take([0, 0, 0, 1, 1, 1, 2, 2, 2])).astype(CDT(ordered=True))
     tm.assert_series_equal(res, exp)
 
 
@@ -199,7 +199,7 @@ def test_single_quantile(data, start, end, length, labels):
 
     if labels is None:
         intervals = IntervalIndex([Interval(start, end)] * length, closed="right")
-        expected = Series(intervals).astype(CategoricalDtype(ordered=True))
+        expected = Series(intervals).astype(CDT(ordered=True))
     else:
         expected = Series([0] * length, dtype=np.intp)
 
@@ -214,14 +214,11 @@ def test_single_quantile(data, start, end, length, labels):
     ],
     ids=lambda x: str(x.dtype),
 )
-def test_qcut_nat(ser, unit):
+def test_qcut_nat(ser):
     # see gh-19768
-    ser = ser.dt.as_unit(unit)
-    td = Timedelta(1, unit=unit).as_unit(unit)
-
-    left = Series([ser[0] - td, np.nan, ser[2] - Day()], dtype=ser.dtype)
-    right = Series([ser[2] - Day(), np.nan, ser[2]], dtype=ser.dtype)
-    intervals = IntervalIndex.from_arrays(left, right)
+    intervals = IntervalIndex.from_tuples(
+        [(ser[0] - Nano(), ser[2] - Day()), np.nan, (ser[2] - Day(), ser[2])]
+    )
     expected = Series(Categorical(intervals, ordered=True))
 
     result = qcut(ser, 2)
@@ -252,7 +249,7 @@ def test_datetime_tz_qcut(bins):
                 ),
             ]
         )
-    ).astype(CategoricalDtype(ordered=True))
+    ).astype(CDT(ordered=True))
     tm.assert_series_equal(result, expected)
 
 

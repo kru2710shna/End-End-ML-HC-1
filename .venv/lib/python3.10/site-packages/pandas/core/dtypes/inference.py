@@ -5,17 +5,14 @@ from __future__ import annotations
 from collections import abc
 from numbers import Number
 import re
-from re import Pattern
-from typing import TYPE_CHECKING
+from typing import Pattern
+import warnings
 
 import numpy as np
 
 from pandas._libs import lib
-
-if TYPE_CHECKING:
-    from collections.abc import Hashable
-
-    from pandas._typing import TypeGuard
+from pandas._typing import ArrayLike
+from pandas.util._exceptions import find_stack_level
 
 is_bool = lib.is_bool
 
@@ -36,7 +33,7 @@ is_list_like = lib.is_list_like
 is_iterator = lib.is_iterator
 
 
-def is_number(obj) -> TypeGuard[Number | np.number]:
+def is_number(obj) -> bool:
     """
     Check if the object is a number.
 
@@ -49,7 +46,7 @@ def is_number(obj) -> TypeGuard[Number | np.number]:
 
     Returns
     -------
-    bool
+    is_number : bool
         Whether `obj` is a number or not.
 
     See Also
@@ -119,13 +116,12 @@ def is_file_like(obj) -> bool:
 
     Returns
     -------
-    bool
+    is_file_like : bool
         Whether `obj` has file-like properties.
 
     Examples
     --------
     >>> import io
-    >>> from pandas.api.types import is_file_like
     >>> buffer = io.StringIO("data")
     >>> is_file_like(buffer)
     True
@@ -138,7 +134,7 @@ def is_file_like(obj) -> bool:
     return bool(hasattr(obj, "__iter__"))
 
 
-def is_re(obj) -> TypeGuard[Pattern]:
+def is_re(obj) -> bool:
     """
     Check if the object is a regex pattern instance.
 
@@ -148,13 +144,11 @@ def is_re(obj) -> TypeGuard[Pattern]:
 
     Returns
     -------
-    bool
+    is_regex : bool
         Whether `obj` is a regex pattern.
 
     Examples
     --------
-    >>> from pandas.api.types import is_re
-    >>> import re
     >>> is_re(re.compile(".*"))
     True
     >>> is_re("foo")
@@ -173,12 +167,11 @@ def is_re_compilable(obj) -> bool:
 
     Returns
     -------
-    bool
+    is_regex_compilable : bool
         Whether `obj` can be compiled as a regex pattern.
 
     Examples
     --------
-    >>> from pandas.api.types import is_re_compilable
     >>> is_re_compilable(".*")
     True
     >>> is_re_compilable(1)
@@ -280,12 +273,11 @@ def is_dict_like(obj) -> bool:
 
     Returns
     -------
-    bool
+    is_dict_like : bool
         Whether `obj` has dict-like properties.
 
     Examples
     --------
-    >>> from pandas.api.types import is_dict_like
     >>> is_dict_like({1: 2})
     True
     >>> is_dict_like([1, 2, 3])
@@ -313,13 +305,12 @@ def is_named_tuple(obj) -> bool:
 
     Returns
     -------
-    bool
+    is_named_tuple : bool
         Whether `obj` is a named tuple.
 
     Examples
     --------
     >>> from collections import namedtuple
-    >>> from pandas.api.types import is_named_tuple
     >>> Point = namedtuple("Point", ["x", "y"])
     >>> p = Point(1, 2)
     >>>
@@ -331,7 +322,7 @@ def is_named_tuple(obj) -> bool:
     return isinstance(obj, abc.Sequence) and hasattr(obj, "_fields")
 
 
-def is_hashable(obj) -> TypeGuard[Hashable]:
+def is_hashable(obj) -> bool:
     """
     Return True if hash(obj) will succeed, False otherwise.
 
@@ -348,7 +339,6 @@ def is_hashable(obj) -> TypeGuard[Hashable]:
     Examples
     --------
     >>> import collections
-    >>> from pandas.api.types import is_hashable
     >>> a = ([],)
     >>> isinstance(a, collections.abc.Hashable)
     True
@@ -401,7 +391,7 @@ def is_sequence(obj) -> bool:
         return False
 
 
-def is_dataclass(item) -> bool:
+def is_dataclass(item):
     """
     Checks if the object is a data-class instance
 
@@ -430,8 +420,47 @@ def is_dataclass(item) -> bool:
 
     """
     try:
-        import dataclasses
+        from dataclasses import is_dataclass
 
-        return dataclasses.is_dataclass(item) and not isinstance(item, type)
+        return is_dataclass(item) and not isinstance(item, type)
     except ImportError:
         return False
+
+
+def is_inferred_bool_dtype(arr: ArrayLike) -> bool:
+    """
+    Check if this is a ndarray[bool] or an ndarray[object] of bool objects.
+
+    Parameters
+    ----------
+    arr : np.ndarray or ExtensionArray
+
+    Returns
+    -------
+    bool
+
+    Notes
+    -----
+    This does not include the special treatment is_bool_dtype uses for
+    Categorical.
+    """
+    if not isinstance(arr, np.ndarray):
+        return False
+
+    dtype = arr.dtype
+    if dtype == np.dtype(bool):
+        return True
+    elif dtype == np.dtype("object"):
+        result = lib.is_bool_array(arr)
+        if result:
+            # GH#46188
+            warnings.warn(
+                "In a future version, object-dtype columns with all-bool values "
+                "will not be included in reductions with bool_only=True. "
+                "Explicitly cast to bool dtype instead.",
+                FutureWarning,
+                stacklevel=find_stack_level(),
+            )
+        return result
+
+    return False

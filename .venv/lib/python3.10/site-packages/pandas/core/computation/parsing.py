@@ -7,13 +7,10 @@ from io import StringIO
 from keyword import iskeyword
 import token
 import tokenize
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import (
-        Hashable,
-        Iterator,
-    )
+from typing import (
+    Hashable,
+    Iterator,
+)
 
 # A token value Python's tokenizer probably will never use.
 BACKTICK_QUOTED_STRING = 100
@@ -62,7 +59,7 @@ def create_valid_python_identifier(name: str) -> str:
     )
 
     name = "".join([special_characters_replacements.get(char, char) for char in name])
-    name = f"BACKTICK_QUOTED_STRING_{name}"
+    name = "BACKTICK_QUOTED_STRING_" + name
 
     if not name.isidentifier():
         raise SyntaxError(f"Could not convert '{name}' to a valid Python identifier.")

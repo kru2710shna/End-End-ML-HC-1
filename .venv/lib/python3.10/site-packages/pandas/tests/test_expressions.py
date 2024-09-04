@@ -1,5 +1,6 @@
 import operator
 import re
+import warnings
 
 import numpy as np
 import pytest
@@ -13,95 +14,45 @@ from pandas.core.api import (
 )
 from pandas.core.computation import expressions as expr
 
+_frame = DataFrame(np.random.randn(10001, 4), columns=list("ABCD"), dtype="float64")
+_frame2 = DataFrame(np.random.randn(100, 4), columns=list("ABCD"), dtype="float64")
+_mixed = DataFrame(
+    {
+        "A": _frame["A"].copy(),
+        "B": _frame["B"].astype("float32"),
+        "C": _frame["C"].astype("int64"),
+        "D": _frame["D"].astype("int32"),
+    }
+)
+_mixed2 = DataFrame(
+    {
+        "A": _frame2["A"].copy(),
+        "B": _frame2["B"].astype("float32"),
+        "C": _frame2["C"].astype("int64"),
+        "D": _frame2["D"].astype("int32"),
+    }
+)
+_integer = DataFrame(
+    np.random.randint(1, 100, size=(10001, 4)), columns=list("ABCD"), dtype="int64"
+)
+_integer2 = DataFrame(
+    np.random.randint(1, 100, size=(101, 4)), columns=list("ABCD"), dtype="int64"
+)
+_array = _frame["A"].values.copy()
+_array2 = _frame2["A"].values.copy()
 
-@pytest.fixture
-def _frame():
-    return DataFrame(
-        np.random.default_rng(2).standard_normal((10001, 4)),
-        columns=list("ABCD"),
-        dtype="float64",
-    )
-
-
-@pytest.fixture
-def _frame2():
-    return DataFrame(
-        np.random.default_rng(2).standard_normal((100, 4)),
-        columns=list("ABCD"),
-        dtype="float64",
-    )
-
-
-@pytest.fixture
-def _mixed(_frame):
-    return DataFrame(
-        {
-            "A": _frame["A"].copy(),
-            "B": _frame["B"].astype("float32"),
-            "C": _frame["C"].astype("int64"),
-            "D": _frame["D"].astype("int32"),
-        }
-    )
-
-
-@pytest.fixture
-def _mixed2(_frame2):
-    return DataFrame(
-        {
-            "A": _frame2["A"].copy(),
-            "B": _frame2["B"].astype("float32"),
-            "C": _frame2["C"].astype("int64"),
-            "D": _frame2["D"].astype("int32"),
-        }
-    )
-
-
-@pytest.fixture
-def _integer():
-    return DataFrame(
-        np.random.default_rng(2).integers(1, 100, size=(10001, 4)),
-        columns=list("ABCD"),
-        dtype="int64",
-    )
-
-
-@pytest.fixture
-def _integer_integers(_integer):
-    # integers to get a case with zeros
-    return _integer * np.random.default_rng(2).integers(0, 2, size=np.shape(_integer))
-
-
-@pytest.fixture
-def _integer2():
-    return DataFrame(
-        np.random.default_rng(2).integers(1, 100, size=(101, 4)),
-        columns=list("ABCD"),
-        dtype="int64",
-    )
-
-
-@pytest.fixture
-def _array(_frame):
-    return _frame["A"].values.copy()
-
-
-@pytest.fixture
-def _array2(_frame2):
-    return _frame2["A"].values.copy()
-
-
-@pytest.fixture
-def _array_mixed(_mixed):
-    return _mixed["D"].values.copy()
-
-
-@pytest.fixture
-def _array_mixed2(_mixed2):
-    return _mixed2["D"].values.copy()
+_array_mixed = _mixed["D"].values.copy()
+_array_mixed2 = _mixed2["D"].values.copy()
 
 
 @pytest.mark.skipif(not expr.USE_NUMEXPR, reason="not using numexpr")
 class TestExpressions:
+    def setup_method(self):
+        self._MIN_ELEMENTS = expr._MIN_ELEMENTS
+
+    def teardown_method(self):
+        expr._MIN_ELEMENTS = self._MIN_ELEMENTS
+
     @staticmethod
     def call_op(df, other, flex: bool, opname: str):
         if flex:
@@ -119,80 +70,78 @@ class TestExpressions:
         return result, expected
 
     @pytest.mark.parametrize(
-        "fixture",
+        "df",
         [
-            "_integer",
-            "_integer2",
-            "_integer_integers",
-            "_frame",
-            "_frame2",
-            "_mixed",
-            "_mixed2",
+            _integer,
+            _integer2,
+            # randint to get a case with zeros
+            _integer * np.random.randint(0, 2, size=np.shape(_integer)),
+            _frame,
+            _frame2,
+            _mixed,
+            _mixed2,
         ],
     )
     @pytest.mark.parametrize("flex", [True, False])
     @pytest.mark.parametrize(
         "arith", ["add", "sub", "mul", "mod", "truediv", "floordiv"]
     )
-    def test_run_arithmetic(self, request, fixture, flex, arith, monkeypatch):
-        df = request.getfixturevalue(fixture)
-        with monkeypatch.context() as m:
-            m.setattr(expr, "_MIN_ELEMENTS", 0)
-            result, expected = self.call_op(df, df, flex, arith)
+    def test_run_arithmetic(self, df, flex, arith):
+        expr._MIN_ELEMENTS = 0
+        result, expected = self.call_op(df, df, flex, arith)
 
+        if arith == "truediv":
+            assert all(x.kind == "f" for x in expected.dtypes.values)
+        tm.assert_equal(expected, result)
+
+        for i in range(len(df.columns)):
+            result, expected = self.call_op(df.iloc[:, i], df.iloc[:, i], flex, arith)
             if arith == "truediv":
-                assert all(x.kind == "f" for x in expected.dtypes.values)
+                assert expected.dtype.kind == "f"
             tm.assert_equal(expected, result)
 
-            for i in range(len(df.columns)):
-                result, expected = self.call_op(
-                    df.iloc[:, i], df.iloc[:, i], flex, arith
-                )
-                if arith == "truediv":
-                    assert expected.dtype.kind == "f"
-                tm.assert_equal(expected, result)
-
     @pytest.mark.parametrize(
-        "fixture",
+        "df",
         [
-            "_integer",
-            "_integer2",
-            "_integer_integers",
-            "_frame",
-            "_frame2",
-            "_mixed",
-            "_mixed2",
+            _integer,
+            _integer2,
+            # randint to get a case with zeros
+            _integer * np.random.randint(0, 2, size=np.shape(_integer)),
+            _frame,
+            _frame2,
+            _mixed,
+            _mixed2,
         ],
     )
     @pytest.mark.parametrize("flex", [True, False])
-    def test_run_binary(self, request, fixture, flex, comparison_op, monkeypatch):
+    def test_run_binary(self, df, flex, comparison_op):
         """
         tests solely that the result is the same whether or not numexpr is
         enabled.  Need to test whether the function does the correct thing
         elsewhere.
         """
-        df = request.getfixturevalue(fixture)
         arith = comparison_op.__name__
         with option_context("compute.use_numexpr", False):
             other = df.copy() + 1
 
-        with monkeypatch.context() as m:
-            m.setattr(expr, "_MIN_ELEMENTS", 0)
-            expr.set_test_mode(True)
+        expr._MIN_ELEMENTS = 0
+        expr.set_test_mode(True)
 
-            result, expected = self.call_op(df, other, flex, arith)
+        result, expected = self.call_op(df, other, flex, arith)
 
-            used_numexpr = expr.get_test_result()
-            assert used_numexpr, "Did not use numexpr as expected."
-            tm.assert_equal(expected, result)
+        used_numexpr = expr.get_test_result()
+        assert used_numexpr, "Did not use numexpr as expected."
+        tm.assert_equal(expected, result)
 
-            for i in range(len(df.columns)):
-                binary_comp = other.iloc[:, i] + 1
-                self.call_op(df.iloc[:, i], binary_comp, flex, "add")
+        # FIXME: dont leave commented-out
+        # series doesn't uses vec_compare instead of numexpr...
+        # for i in range(len(df.columns)):
+        #     binary_comp = other.iloc[:, i] + 1
+        #     self.run_binary(df.iloc[:, i], binary_comp, flex)
 
     def test_invalid(self):
-        array = np.random.default_rng(2).standard_normal(1_000_001)
-        array2 = np.random.default_rng(2).standard_normal(100)
+        array = np.random.randn(1_000_001)
+        array2 = np.random.randn(100)
 
         # no op
         result = expr._can_use_numexpr(operator.add, None, array, array, "evaluate")
@@ -206,58 +155,67 @@ class TestExpressions:
         result = expr._can_use_numexpr(operator.add, "+", array, array2, "evaluate")
         assert result
 
-    @pytest.mark.filterwarnings("ignore:invalid value encountered in:RuntimeWarning")
     @pytest.mark.parametrize(
         "opname,op_str",
         [("add", "+"), ("sub", "-"), ("mul", "*"), ("truediv", "/"), ("pow", "**")],
     )
     @pytest.mark.parametrize(
-        "left_fix,right_fix", [("_array", "_array2"), ("_array_mixed", "_array_mixed2")]
+        "left,right", [(_array, _array2), (_array_mixed, _array_mixed2)]
     )
-    def test_binary_ops(self, request, opname, op_str, left_fix, right_fix):
-        left = request.getfixturevalue(left_fix)
-        right = request.getfixturevalue(right_fix)
+    def test_binary_ops(self, opname, op_str, left, right):
+        def testit():
 
-        def testit(left, right, opname, op_str):
             if opname == "pow":
-                left = np.abs(left)
+                # TODO: get this working
+                return
 
             op = getattr(operator, opname)
 
-            # array has 0s
-            result = expr.evaluate(op, left, left, use_numexpr=True)
-            expected = expr.evaluate(op, left, left, use_numexpr=False)
+            with warnings.catch_warnings():
+                # array has 0s
+                msg = "invalid value encountered in true_divide"
+                warnings.filterwarnings("ignore", msg, RuntimeWarning)
+                result = expr.evaluate(op, left, left, use_numexpr=True)
+                expected = expr.evaluate(op, left, left, use_numexpr=False)
             tm.assert_numpy_array_equal(result, expected)
 
             result = expr._can_use_numexpr(op, op_str, right, right, "evaluate")
             assert not result
 
         with option_context("compute.use_numexpr", False):
-            testit(left, right, opname, op_str)
+            testit()
 
         expr.set_numexpr_threads(1)
-        testit(left, right, opname, op_str)
+        testit()
         expr.set_numexpr_threads()
-        testit(left, right, opname, op_str)
+        testit()
 
     @pytest.mark.parametrize(
-        "left_fix,right_fix", [("_array", "_array2"), ("_array_mixed", "_array_mixed2")]
+        "opname,op_str",
+        [
+            ("gt", ">"),
+            ("lt", "<"),
+            ("ge", ">="),
+            ("le", "<="),
+            ("eq", "=="),
+            ("ne", "!="),
+        ],
     )
-    def test_comparison_ops(self, request, comparison_op, left_fix, right_fix):
-        left = request.getfixturevalue(left_fix)
-        right = request.getfixturevalue(right_fix)
-
+    @pytest.mark.parametrize(
+        "left,right", [(_array, _array2), (_array_mixed, _array_mixed2)]
+    )
+    def test_comparison_ops(self, opname, op_str, left, right):
         def testit():
             f12 = left + 1
             f22 = right + 1
 
-            op = comparison_op
+            op = getattr(operator, opname)
 
             result = expr.evaluate(op, left, f12, use_numexpr=True)
             expected = expr.evaluate(op, left, f12, use_numexpr=False)
             tm.assert_numpy_array_equal(result, expected)
 
-            result = expr._can_use_numexpr(op, op, right, f22, "evaluate")
+            result = expr._can_use_numexpr(op, op_str, right, f22, "evaluate")
             assert not result
 
         with option_context("compute.use_numexpr", False):
@@ -269,10 +227,8 @@ class TestExpressions:
         testit()
 
     @pytest.mark.parametrize("cond", [True, False])
-    @pytest.mark.parametrize("fixture", ["_frame", "_frame2", "_mixed", "_mixed2"])
-    def test_where(self, request, cond, fixture):
-        df = request.getfixturevalue(fixture)
-
+    @pytest.mark.parametrize("df", [_frame, _frame2, _mixed, _mixed2])
+    def test_where(self, cond, df):
         def testit():
             c = np.empty(df.shape, dtype=np.bool_)
             c.fill(cond)
@@ -292,12 +248,7 @@ class TestExpressions:
         "op_str,opname", [("/", "truediv"), ("//", "floordiv"), ("**", "pow")]
     )
     def test_bool_ops_raise_on_arithmetic(self, op_str, opname):
-        df = DataFrame(
-            {
-                "a": np.random.default_rng(2).random(10) > 0.5,
-                "b": np.random.default_rng(2).random(10) > 0.5,
-            }
-        )
+        df = DataFrame({"a": np.random.rand(10) > 0.5, "b": np.random.rand(10) > 0.5})
 
         msg = f"operator '{opname}' not implemented for bool dtypes"
         f = getattr(operator, opname)
@@ -326,12 +277,7 @@ class TestExpressions:
     )
     def test_bool_ops_warn_on_arithmetic(self, op_str, opname):
         n = 10
-        df = DataFrame(
-            {
-                "a": np.random.default_rng(2).random(n) > 0.5,
-                "b": np.random.default_rng(2).random(n) > 0.5,
-            }
-        )
+        df = DataFrame({"a": np.random.rand(n) > 0.5, "b": np.random.rand(n) > 0.5})
 
         subs = {"+": "|", "*": "&", "-": "^"}
         sub_funcs = {"|": "or_", "&": "and_", "^": "xor"}
@@ -404,7 +350,7 @@ class TestExpressions:
         "arith", ("add", "sub", "mul", "mod", "truediv", "floordiv")
     )
     @pytest.mark.parametrize("axis", (0, 1))
-    def test_frame_series_axis(self, axis, arith, _frame, monkeypatch):
+    def test_frame_series_axis(self, axis, arith):
         # GH#26736 Dataframe.floordiv(Series, axis=1) fails
 
         df = _frame
@@ -413,16 +359,15 @@ class TestExpressions:
         else:
             other = df.iloc[:, 0]
 
-        with monkeypatch.context() as m:
-            m.setattr(expr, "_MIN_ELEMENTS", 0)
+        expr._MIN_ELEMENTS = 0
 
-            op_func = getattr(df, arith)
+        op_func = getattr(df, arith)
 
-            with option_context("compute.use_numexpr", False):
-                expected = op_func(other, axis=axis)
+        with option_context("compute.use_numexpr", False):
+            expected = op_func(other, axis=axis)
 
-            result = op_func(other, axis=axis)
-            tm.assert_frame_equal(expected, result)
+        result = op_func(other, axis=axis)
+        tm.assert_frame_equal(expected, result)
 
     @pytest.mark.parametrize(
         "op",
@@ -435,32 +380,29 @@ class TestExpressions:
     )
     @pytest.mark.parametrize("box", [DataFrame, Series, Index])
     @pytest.mark.parametrize("scalar", [-5, 5])
-    def test_python_semantics_with_numexpr_installed(
-        self, op, box, scalar, monkeypatch
-    ):
+    def test_python_semantics_with_numexpr_installed(self, op, box, scalar):
         # https://github.com/pandas-dev/pandas/issues/36047
-        with monkeypatch.context() as m:
-            m.setattr(expr, "_MIN_ELEMENTS", 0)
-            data = np.arange(-50, 50)
-            obj = box(data)
-            method = getattr(obj, op)
-            result = method(scalar)
+        expr._MIN_ELEMENTS = 0
+        data = np.arange(-50, 50)
+        obj = box(data)
+        method = getattr(obj, op)
+        result = method(scalar)
 
-            # compare result with numpy
-            with option_context("compute.use_numexpr", False):
-                expected = method(scalar)
+        # compare result with numpy
+        with option_context("compute.use_numexpr", False):
+            expected = method(scalar)
 
-            tm.assert_equal(result, expected)
+        tm.assert_equal(result, expected)
 
-            # compare result element-wise with Python
-            for i, elem in enumerate(data):
-                if box == DataFrame:
-                    scalar_result = result.iloc[i, 0]
-                else:
-                    scalar_result = result[i]
-                try:
-                    expected = getattr(int(elem), op)(scalar)
-                except ZeroDivisionError:
-                    pass
-                else:
-                    assert scalar_result == expected
+        # compare result element-wise with Python
+        for i, elem in enumerate(data):
+            if box == DataFrame:
+                scalar_result = result.iloc[i, 0]
+            else:
+                scalar_result = result[i]
+            try:
+                expected = getattr(int(elem), op)(scalar)
+            except ZeroDivisionError:
+                pass
+            else:
+                assert scalar_result == expected

@@ -7,7 +7,6 @@ from pandas._libs import (
 from pandas._libs.missing import NA
 
 from pandas.core.dtypes.dtypes import (
-    ArrowDtype,
     CategoricalDtype,
     DatetimeTZDtype,
     IntervalDtype,
@@ -26,6 +25,7 @@ from pandas.core.algorithms import (
     value_counts,
 )
 from pandas.core.arrays import Categorical
+from pandas.core.arrays.arrow import ArrowDtype
 from pandas.core.arrays.boolean import BooleanDtype
 from pandas.core.arrays.floating import (
     Float32Dtype,
@@ -51,12 +51,16 @@ from pandas.core.groupby import (
 from pandas.core.indexes.api import (
     CategoricalIndex,
     DatetimeIndex,
+    Float64Index,
     Index,
+    Int64Index,
     IntervalIndex,
     MultiIndex,
+    NumericIndex,
     PeriodIndex,
     RangeIndex,
     TimedeltaIndex,
+    UInt64Index,
 )
 from pandas.core.indexes.datetimes import (
     bdate_range,
@@ -97,12 +101,14 @@ __all__ = [
     "Flags",
     "Float32Dtype",
     "Float64Dtype",
+    "Float64Index",
     "Grouper",
     "Index",
     "IndexSlice",
     "Int16Dtype",
     "Int32Dtype",
     "Int64Dtype",
+    "Int64Index",
     "Int8Dtype",
     "Interval",
     "IntervalDtype",
@@ -116,6 +122,7 @@ __all__ = [
     "NaT",
     "notna",
     "notnull",
+    "NumericIndex",
     "Period",
     "PeriodDtype",
     "PeriodIndex",
@@ -134,6 +141,7 @@ __all__ = [
     "UInt16Dtype",
     "UInt32Dtype",
     "UInt64Dtype",
+    "UInt64Index",
     "UInt8Dtype",
     "unique",
     "value_counts",

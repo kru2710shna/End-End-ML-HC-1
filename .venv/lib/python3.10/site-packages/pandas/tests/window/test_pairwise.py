@@ -1,7 +1,7 @@
+import warnings
+
 import numpy as np
 import pytest
-
-from pandas.compat import IS64
 
 from pandas import (
     DataFrame,
@@ -49,31 +49,27 @@ def pairwise_other_frame():
 
 def test_rolling_cov(series):
     A = series
-    B = A + np.random.default_rng(2).standard_normal(len(A))
+    B = A + np.random.randn(len(A))
 
     result = A.rolling(window=50, min_periods=25).cov(B)
-    tm.assert_almost_equal(result.iloc[-1], np.cov(A[-50:], B[-50:])[0, 1])
+    tm.assert_almost_equal(result[-1], np.cov(A[-50:], B[-50:])[0, 1])
 
 
 def test_rolling_corr(series):
     A = series
-    B = A + np.random.default_rng(2).standard_normal(len(A))
+    B = A + np.random.randn(len(A))
 
     result = A.rolling(window=50, min_periods=25).corr(B)
-    tm.assert_almost_equal(result.iloc[-1], np.corrcoef(A[-50:], B[-50:])[0, 1])
+    tm.assert_almost_equal(result[-1], np.corrcoef(A[-50:], B[-50:])[0, 1])
 
-
-def test_rolling_corr_bias_correction():
     # test for correct bias correction
-    a = Series(
-        np.arange(20, dtype=np.float64), index=date_range("2020-01-01", periods=20)
-    )
-    b = a.copy()
+    a = tm.makeTimeSeries()
+    b = tm.makeTimeSeries()
     a[:5] = np.nan
     b[:10] = np.nan
 
     result = a.rolling(window=len(a), min_periods=1).corr(b)
-    tm.assert_almost_equal(result.iloc[-1], a.corr(b))
+    tm.assert_almost_equal(result[-1], a.corr(b))
 
 
 @pytest.mark.parametrize("func", ["cov", "corr"])
@@ -97,11 +93,7 @@ def test_flex_binary_frame(method, frame):
     tm.assert_frame_equal(res2, exp)
 
     frame2 = frame.copy()
-    frame2 = DataFrame(
-        np.random.default_rng(2).standard_normal(frame2.shape),
-        index=frame2.index,
-        columns=frame2.columns,
-    )
+    frame2.values[:] = np.random.randn(*frame2.shape)
 
     res3 = getattr(frame.rolling(window=10), method)(frame2)
     exp = DataFrame(
@@ -137,7 +129,7 @@ def test_corr_sanity():
     res = df[0].rolling(5, center=True).corr(df[1])
     assert all(np.abs(np.nan_to_num(x)) <= 1 for x in res)
 
-    df = DataFrame(np.random.default_rng(2).random((30, 2)))
+    df = DataFrame(np.random.rand(30, 2))
     res = df[0].rolling(5, center=True).corr(df[1])
     assert all(np.abs(np.nan_to_num(x)) <= 1 for x in res)
 
@@ -176,6 +168,7 @@ def test_rolling_corr_diff_length():
     ],
 )
 def test_rolling_functions_window_non_shrinkage_binary(f):
+
     # corr/cov return a MI DataFrame
     df = DataFrame(
         [[1, 5], [3, 2], [3, 9], [-1, 0]],
@@ -199,11 +192,14 @@ def test_rolling_functions_window_non_shrinkage_binary(f):
     ],
 )
 def test_moment_functions_zero_length_pairwise(f):
+
     df1 = DataFrame()
     df2 = DataFrame(columns=Index(["a"], name="foo"), index=Index([], name="bar"))
     df2["a"] = df2["a"].astype("float64")
 
-    df1_expected = DataFrame(index=MultiIndex.from_product([df1.index, df1.columns]))
+    df1_expected = DataFrame(
+        index=MultiIndex.from_product([df1.index, df1.columns]), columns=Index([])
+    )
     df2_expected = DataFrame(
         index=MultiIndex.from_product([df2.index, df2.columns], names=["bar", "foo"]),
         columns=Index(["a"], name="foo"),
@@ -218,9 +214,11 @@ def test_moment_functions_zero_length_pairwise(f):
 
 
 class TestPairwise:
+
     # GH 7738
     @pytest.mark.parametrize("f", [lambda x: x.cov(), lambda x: x.corr()])
     def test_no_flex(self, pairwise_frames, pairwise_target_frame, f):
+
         # DataFrame methods (which do not call flex_binary_moment())
 
         result = f(pairwise_frames)
@@ -246,6 +244,7 @@ class TestPairwise:
         ],
     )
     def test_pairwise_with_self(self, pairwise_frames, pairwise_target_frame, f):
+
         # DataFrame with itself, pairwise=True
         # note that we may construct the 1st level of the MI
         # in a non-monotonic way, so compare accordingly
@@ -253,7 +252,7 @@ class TestPairwise:
         tm.assert_index_equal(
             result.index.levels[0], pairwise_frames.index, check_names=False
         )
-        tm.assert_index_equal(
+        tm.assert_numpy_array_equal(
             safe_sort(result.index.levels[1]),
             safe_sort(pairwise_frames.columns.unique()),
         )
@@ -278,6 +277,7 @@ class TestPairwise:
         ],
     )
     def test_no_pairwise_with_self(self, pairwise_frames, pairwise_target_frame, f):
+
         # DataFrame with itself, pairwise=False
         result = f(pairwise_frames)
         tm.assert_index_equal(result.index, pairwise_frames.index)
@@ -296,13 +296,7 @@ class TestPairwise:
             lambda x, y: x.expanding().cov(y, pairwise=True),
             lambda x, y: x.expanding().corr(y, pairwise=True),
             lambda x, y: x.rolling(window=3).cov(y, pairwise=True),
-            # TODO: We're missing a flag somewhere in meson
-            pytest.param(
-                lambda x, y: x.rolling(window=3).corr(y, pairwise=True),
-                marks=pytest.mark.xfail(
-                    not IS64, reason="Precision issues on 32 bit", strict=False
-                ),
-            ),
+            lambda x, y: x.rolling(window=3).corr(y, pairwise=True),
             lambda x, y: x.ewm(com=3).cov(y, pairwise=True),
             lambda x, y: x.ewm(com=3).corr(y, pairwise=True),
         ],
@@ -310,12 +304,13 @@ class TestPairwise:
     def test_pairwise_with_other(
         self, pairwise_frames, pairwise_target_frame, pairwise_other_frame, f
     ):
+
         # DataFrame with another DataFrame, pairwise=True
         result = f(pairwise_frames, pairwise_other_frame)
         tm.assert_index_equal(
             result.index.levels[0], pairwise_frames.index, check_names=False
         )
-        tm.assert_index_equal(
+        tm.assert_numpy_array_equal(
             safe_sort(result.index.levels[1]),
             safe_sort(pairwise_other_frame.columns.unique()),
         )
@@ -327,7 +322,6 @@ class TestPairwise:
 
         tm.assert_numpy_array_equal(result, expected, check_dtype=False)
 
-    @pytest.mark.filterwarnings("ignore:RuntimeWarning")
     @pytest.mark.parametrize(
         "f",
         [
@@ -340,6 +334,7 @@ class TestPairwise:
         ],
     )
     def test_no_pairwise_with_other(self, pairwise_frames, pairwise_other_frame, f):
+
         # DataFrame with another DataFrame, pairwise=False
         result = (
             f(pairwise_frames, pairwise_other_frame)
@@ -347,11 +342,13 @@ class TestPairwise:
             else None
         )
         if result is not None:
-            # we can have int and str columns
-            expected_index = pairwise_frames.index.union(pairwise_other_frame.index)
-            expected_columns = pairwise_frames.columns.union(
-                pairwise_other_frame.columns
-            )
+            with warnings.catch_warnings(record=True):
+                warnings.simplefilter("ignore", RuntimeWarning)
+                # we can have int and str columns
+                expected_index = pairwise_frames.index.union(pairwise_other_frame.index)
+                expected_columns = pairwise_frames.columns.union(
+                    pairwise_other_frame.columns
+                )
             tm.assert_index_equal(result.index, expected_index)
             tm.assert_index_equal(result.columns, expected_columns)
         else:
@@ -372,6 +369,7 @@ class TestPairwise:
         ],
     )
     def test_pairwise_with_series(self, pairwise_frames, pairwise_target_frame, f):
+
         # DataFrame with a Series
         result = f(pairwise_frames, Series([1, 1, 3, 8]))
         tm.assert_index_equal(result.index, pairwise_frames.index)
@@ -396,7 +394,7 @@ class TestPairwise:
     def test_corr_freq_memory_error(self):
         # GH 31789
         s = Series(range(5), index=date_range("2020", periods=5))
-        result = s.rolling("12h").corr(s)
+        result = s.rolling("12H").corr(s)
         expected = Series([np.nan] * 5, index=date_range("2020", periods=5))
         tm.assert_series_equal(result, expected)
 
@@ -414,7 +412,7 @@ class TestPairwise:
         expected = DataFrame(
             np.vstack(
                 (
-                    np.full((8, 8), np.nan),
+                    np.full((8, 8), np.NaN),
                     np.full((8, 8), 32.000000),
                     np.full((8, 8), 63.881919),
                 )
@@ -433,11 +431,7 @@ class TestPairwise:
         expected = DataFrame(
             np.nan,
             index=MultiIndex.from_arrays(
-                [
-                    np.repeat(np.arange(5, dtype=np.int64), 2),
-                    ["M", "N"] * 5,
-                    ["P", "Q"] * 5,
-                ],
+                [np.repeat(np.arange(5), 2), ["M", "N"] * 5, ["P", "Q"] * 5],
                 names=[None, "a", "b"],
             ),
             columns=columns,

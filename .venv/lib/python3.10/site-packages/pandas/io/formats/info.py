@@ -6,26 +6,25 @@ from abc import (
 )
 import sys
 from textwrap import dedent
-from typing import TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 
 from pandas._config import get_option
+
+from pandas._typing import (
+    Dtype,
+    WriteBuffer,
+)
 
 from pandas.io.formats import format as fmt
 from pandas.io.formats.printing import pprint_thing
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Iterable,
-        Iterator,
-        Mapping,
-        Sequence,
-    )
-
-    from pandas._typing import (
-        Dtype,
-        WriteBuffer,
-    )
-
     from pandas import (
         DataFrame,
         Index,
@@ -51,6 +50,13 @@ show_counts_sub = dedent(
         ``pandas.options.display.max_info_rows`` and
         ``pandas.options.display.max_info_columns``. A value of True always
         shows the counts, and False never shows the counts."""
+)
+
+null_counts_sub = dedent(
+    """
+    null_counts : bool, optional
+        .. deprecated:: 1.2.0
+            Use show_counts instead."""
 )
 
 
@@ -153,6 +159,7 @@ frame_sub_kwargs = {
     "type_sub": " and columns",
     "max_cols_sub": frame_max_cols_sub,
     "show_counts_sub": show_counts_sub,
+    "null_counts_sub": null_counts_sub,
     "examples_sub": frame_examples_sub,
     "see_also_sub": frame_see_also_sub,
     "version_added_sub": "",
@@ -166,7 +173,7 @@ series_examples_sub = dedent(
     >>> s = pd.Series(text_values, index=int_values)
     >>> s.info()
     <class 'pandas.core.series.Series'>
-    Index: 5 entries, 1 to 5
+    Int64Index: 5 entries, 1 to 5
     Series name: None
     Non-Null Count  Dtype
     --------------  -----
@@ -178,7 +185,7 @@ series_examples_sub = dedent(
 
     >>> s.info(verbose=False)
     <class 'pandas.core.series.Series'>
-    Index: 5 entries, 1 to 5
+    Int64Index: 5 entries, 1 to 5
     dtypes: object(1)
     memory usage: 80.0+ bytes
 
@@ -233,6 +240,7 @@ series_sub_kwargs = {
     "type_sub": "",
     "max_cols_sub": "",
     "show_counts_sub": show_counts_sub,
+    "null_counts_sub": "",
     "examples_sub": series_examples_sub,
     "see_also_sub": series_see_also_sub,
     "version_added_sub": "\n.. versionadded:: 1.4.0\n",
@@ -255,7 +263,7 @@ INFO_DOCSTRING = dedent(
     buf : writable buffer, defaults to sys.stdout
         Where to send the output. By default, the output is printed to
         sys.stdout. Pass a writable buffer if you need to further process
-        the output.
+        the output.\
     {max_cols_sub}
     memory_usage : bool, str, optional
         Specifies whether total memory usage of the {klass}
@@ -272,7 +280,7 @@ INFO_DOCSTRING = dedent(
         at the cost of computational resources. See the
         :ref:`Frequently Asked Questions <df-memory-usage>` for more
         details.
-    {show_counts_sub}
+    {show_counts_sub}{null_counts_sub}
 
     Returns
     -------
@@ -356,7 +364,7 @@ def _initialize_memory_usage(
     return memory_usage
 
 
-class _BaseInfo(ABC):
+class BaseInfo(ABC):
     """
     Base class for DataFrameInfo and SeriesInfo.
 
@@ -439,7 +447,7 @@ class _BaseInfo(ABC):
         pass
 
 
-class DataFrameInfo(_BaseInfo):
+class DataFrameInfo(BaseInfo):
     """
     Class storing dataframe-specific info.
     """
@@ -492,7 +500,10 @@ class DataFrameInfo(_BaseInfo):
 
     @property
     def memory_usage_bytes(self) -> int:
-        deep = self.memory_usage == "deep"
+        if self.memory_usage == "deep":
+            deep = True
+        else:
+            deep = False
         return self.data.memory_usage(index=True, deep=deep).sum()
 
     def render(
@@ -503,7 +514,7 @@ class DataFrameInfo(_BaseInfo):
         verbose: bool | None,
         show_counts: bool | None,
     ) -> None:
-        printer = _DataFrameInfoPrinter(
+        printer = DataFrameInfoPrinter(
             info=self,
             max_cols=max_cols,
             verbose=verbose,
@@ -512,7 +523,7 @@ class DataFrameInfo(_BaseInfo):
         printer.to_buffer(buf)
 
 
-class SeriesInfo(_BaseInfo):
+class SeriesInfo(BaseInfo):
     """
     Class storing series-specific info.
     """
@@ -538,7 +549,7 @@ class SeriesInfo(_BaseInfo):
                 "Argument `max_cols` can only be passed "
                 "in DataFrame.info, not Series.info"
             )
-        printer = _SeriesInfoPrinter(
+        printer = SeriesInfoPrinter(
             info=self,
             verbose=verbose,
             show_counts=show_counts,
@@ -568,11 +579,14 @@ class SeriesInfo(_BaseInfo):
         memory_usage_bytes : int
             Object's total memory usage in bytes.
         """
-        deep = self.memory_usage == "deep"
+        if self.memory_usage == "deep":
+            deep = True
+        else:
+            deep = False
         return self.data.memory_usage(index=True, deep=deep)
 
 
-class _InfoPrinterAbstract:
+class InfoPrinterAbstract:
     """
     Class for printing dataframe or series info.
     """
@@ -586,11 +600,11 @@ class _InfoPrinterAbstract:
         fmt.buffer_put_lines(buf, lines)
 
     @abstractmethod
-    def _create_table_builder(self) -> _TableBuilderAbstract:
+    def _create_table_builder(self) -> TableBuilderAbstract:
         """Create instance of table builder."""
 
 
-class _DataFrameInfoPrinter(_InfoPrinterAbstract):
+class DataFrameInfoPrinter(InfoPrinterAbstract):
     """
     Class for printing dataframe info.
 
@@ -650,27 +664,28 @@ class _DataFrameInfoPrinter(_InfoPrinterAbstract):
         else:
             return show_counts
 
-    def _create_table_builder(self) -> _DataFrameTableBuilder:
+    def _create_table_builder(self) -> DataFrameTableBuilder:
         """
         Create instance of table builder based on verbosity and display settings.
         """
         if self.verbose:
-            return _DataFrameTableBuilderVerbose(
+            return DataFrameTableBuilderVerbose(
                 info=self.info,
                 with_counts=self.show_counts,
             )
         elif self.verbose is False:  # specifically set to False, not necessarily None
-            return _DataFrameTableBuilderNonVerbose(info=self.info)
-        elif self.exceeds_info_cols:
-            return _DataFrameTableBuilderNonVerbose(info=self.info)
+            return DataFrameTableBuilderNonVerbose(info=self.info)
         else:
-            return _DataFrameTableBuilderVerbose(
-                info=self.info,
-                with_counts=self.show_counts,
-            )
+            if self.exceeds_info_cols:
+                return DataFrameTableBuilderNonVerbose(info=self.info)
+            else:
+                return DataFrameTableBuilderVerbose(
+                    info=self.info,
+                    with_counts=self.show_counts,
+                )
 
 
-class _SeriesInfoPrinter(_InfoPrinterAbstract):
+class SeriesInfoPrinter(InfoPrinterAbstract):
     """Class for printing series info.
 
     Parameters
@@ -694,17 +709,17 @@ class _SeriesInfoPrinter(_InfoPrinterAbstract):
         self.verbose = verbose
         self.show_counts = self._initialize_show_counts(show_counts)
 
-    def _create_table_builder(self) -> _SeriesTableBuilder:
+    def _create_table_builder(self) -> SeriesTableBuilder:
         """
         Create instance of table builder based on verbosity.
         """
         if self.verbose or self.verbose is None:
-            return _SeriesTableBuilderVerbose(
+            return SeriesTableBuilderVerbose(
                 info=self.info,
                 with_counts=self.show_counts,
             )
         else:
-            return _SeriesTableBuilderNonVerbose(info=self.info)
+            return SeriesTableBuilderNonVerbose(info=self.info)
 
     def _initialize_show_counts(self, show_counts: bool | None) -> bool:
         if show_counts is None:
@@ -713,13 +728,13 @@ class _SeriesInfoPrinter(_InfoPrinterAbstract):
             return show_counts
 
 
-class _TableBuilderAbstract(ABC):
+class TableBuilderAbstract(ABC):
     """
     Abstract builder for info table.
     """
 
     _lines: list[str]
-    info: _BaseInfo
+    info: BaseInfo
 
     @abstractmethod
     def get_lines(self) -> list[str]:
@@ -769,7 +784,7 @@ class _TableBuilderAbstract(ABC):
         self._lines.append(f"dtypes: {', '.join(collected_dtypes)}")
 
 
-class _DataFrameTableBuilder(_TableBuilderAbstract):
+class DataFrameTableBuilder(TableBuilderAbstract):
     """
     Abstract builder for dataframe info table.
 
@@ -820,7 +835,7 @@ class _DataFrameTableBuilder(_TableBuilderAbstract):
         self._lines.append(f"memory usage: {self.memory_usage_string}")
 
 
-class _DataFrameTableBuilderNonVerbose(_DataFrameTableBuilder):
+class DataFrameTableBuilderNonVerbose(DataFrameTableBuilder):
     """
     Dataframe info table builder for non-verbose output.
     """
@@ -838,7 +853,7 @@ class _DataFrameTableBuilderNonVerbose(_DataFrameTableBuilder):
         self._lines.append(self.ids._summary(name="Columns"))
 
 
-class _TableBuilderVerboseMixin(_TableBuilderAbstract):
+class TableBuilderVerboseMixin(TableBuilderAbstract):
     """
     Mixin for verbose info output.
     """
@@ -931,7 +946,7 @@ class _TableBuilderVerboseMixin(_TableBuilderAbstract):
             yield pprint_thing(dtype)
 
 
-class _DataFrameTableBuilderVerbose(_DataFrameTableBuilder, _TableBuilderVerboseMixin):
+class DataFrameTableBuilderVerbose(DataFrameTableBuilder, TableBuilderVerboseMixin):
     """
     Dataframe info table builder for verbose output.
     """
@@ -997,7 +1012,7 @@ class _DataFrameTableBuilderVerbose(_DataFrameTableBuilder, _TableBuilderVerbose
             yield pprint_thing(col)
 
 
-class _SeriesTableBuilder(_TableBuilderAbstract):
+class SeriesTableBuilder(TableBuilderAbstract):
     """
     Abstract builder for series info table.
 
@@ -1029,7 +1044,7 @@ class _SeriesTableBuilder(_TableBuilderAbstract):
         """Add lines to the info table, pertaining to non-empty series."""
 
 
-class _SeriesTableBuilderNonVerbose(_SeriesTableBuilder):
+class SeriesTableBuilderNonVerbose(SeriesTableBuilder):
     """
     Series info table builder for non-verbose output.
     """
@@ -1043,7 +1058,7 @@ class _SeriesTableBuilderNonVerbose(_SeriesTableBuilder):
             self.add_memory_usage_line()
 
 
-class _SeriesTableBuilderVerbose(_SeriesTableBuilder, _TableBuilderVerboseMixin):
+class SeriesTableBuilderVerbose(SeriesTableBuilder, TableBuilderVerboseMixin):
     """
     Series info table builder for verbose output.
     """

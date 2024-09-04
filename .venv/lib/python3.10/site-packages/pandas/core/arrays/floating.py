@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from typing import ClassVar
-
 import numpy as np
 
-from pandas.core.dtypes.base import register_extension_dtype
 from pandas.core.dtypes.common import is_float_dtype
+from pandas.core.dtypes.dtypes import register_extension_dtype
 
 from pandas.core.arrays.numeric import (
     NumericArray,
@@ -38,8 +36,8 @@ class FloatingDtype(NumericDtype):
         return FloatingArray
 
     @classmethod
-    def _get_dtype_mapping(cls) -> dict[np.dtype, FloatingDtype]:
-        return NUMPY_FLOAT_TO_DTYPE
+    def _str_to_dtype_mapping(cls):
+        return FLOAT_STR_TO_DTYPE
 
     @classmethod
     def _safe_cast(cls, values: np.ndarray, dtype: np.dtype, copy: bool) -> np.ndarray:
@@ -56,6 +54,8 @@ class FloatingDtype(NumericDtype):
 class FloatingArray(NumericArray):
     """
     Array of floating (optional missing) values.
+
+    .. versionadded:: 1.2.0
 
     .. warning::
 
@@ -116,10 +116,8 @@ class FloatingArray(NumericArray):
     # The value used to fill '_data' to avoid upcasting
     _internal_fill_value = np.nan
     # Fill values used for any/all
-    # Incompatible types in assignment (expression has type "float", base class
-    # "BaseMaskedArray" defined the type as "<typing special form>")
-    _truthy_value = 1.0  # type: ignore[assignment]
-    _falsey_value = 0.0  # type: ignore[assignment]
+    _truthy_value = 1.0
+    _falsey_value = 0.0
 
 
 _dtype_docstring = """
@@ -134,20 +132,6 @@ None
 Methods
 -------
 None
-
-Examples
---------
-For Float32Dtype:
-
->>> ser = pd.Series([2.25, pd.NA], dtype=pd.Float32Dtype())
->>> ser.dtype
-Float32Dtype()
-
-For Float64Dtype:
-
->>> ser = pd.Series([2.25, pd.NA], dtype=pd.Float64Dtype())
->>> ser.dtype
-Float64Dtype()
 """
 
 # create the Dtype
@@ -156,18 +140,18 @@ Float64Dtype()
 @register_extension_dtype
 class Float32Dtype(FloatingDtype):
     type = np.float32
-    name: ClassVar[str] = "Float32"
+    name = "Float32"
     __doc__ = _dtype_docstring.format(dtype="float32")
 
 
 @register_extension_dtype
 class Float64Dtype(FloatingDtype):
     type = np.float64
-    name: ClassVar[str] = "Float64"
+    name = "Float64"
     __doc__ = _dtype_docstring.format(dtype="float64")
 
 
-NUMPY_FLOAT_TO_DTYPE: dict[np.dtype, FloatingDtype] = {
-    np.dtype(np.float32): Float32Dtype(),
-    np.dtype(np.float64): Float64Dtype(),
+FLOAT_STR_TO_DTYPE = {
+    "float32": Float32Dtype(),
+    "float64": Float64Dtype(),
 }

@@ -1,5 +1,3 @@
-import pytest
-
 from pandas import (
     DataFrame,
     Index,
@@ -12,15 +10,18 @@ class TestToFrame:
     def test_to_frame_respects_name_none(self):
         # GH#44212 if we explicitly pass name=None, then that should be respected,
         #  not changed to 0
-        # GH-45448 this is first deprecated & enforced in 2.0
+        # GH-45448 this is first deprecated to only change in the future
         ser = Series(range(3))
-        result = ser.to_frame(None)
+        with tm.assert_produces_warning(FutureWarning):
+            result = ser.to_frame(None)
 
-        exp_index = Index([None], dtype=object)
+        # exp_index = Index([None], dtype=object)
+        exp_index = Index([0])
         tm.assert_index_equal(result.columns, exp_index)
 
-        result = ser.rename("foo").to_frame(None)
-        exp_index = Index([None], dtype=object)
+        with tm.assert_produces_warning(FutureWarning):
+            result = ser.rename("foo").to_frame(None)
+        exp_index = Index(["foo"], dtype=object)
         tm.assert_index_equal(result.columns, exp_index)
 
     def test_to_frame(self, datetime_series):
@@ -42,9 +43,6 @@ class TestToFrame:
         )
         tm.assert_frame_equal(rs, xp)
 
-    @pytest.mark.filterwarnings(
-        "ignore:Passing a BlockManager|Passing a SingleBlockManager:DeprecationWarning"
-    )
     def test_to_frame_expanddim(self):
         # GH#9762
 

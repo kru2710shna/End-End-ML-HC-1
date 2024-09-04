@@ -3,7 +3,6 @@ from typing import (
     Callable,
     Iterable,
     Literal,
-    TypeAlias,
     overload,
 )
 
@@ -11,8 +10,8 @@ import numpy as np
 
 from pandas._typing import npt
 
-_BinOp: TypeAlias = Callable[[Any, Any], Any]
-_BoolOp: TypeAlias = Callable[[Any, Any], bool]
+_BinOp = Callable[[Any, Any], Any]
+_BoolOp = Callable[[Any, Any], bool]
 
 def scalar_compare(
     values: np.ndarray,  # object[:]
@@ -37,8 +36,8 @@ def vec_binop(
 @overload
 def maybe_convert_bool(
     arr: npt.NDArray[np.object_],
-    true_values: Iterable | None = None,
-    false_values: Iterable | None = None,
+    true_values: Iterable = ...,
+    false_values: Iterable = ...,
     convert_to_masked_nullable: Literal[False] = ...,
 ) -> tuple[np.ndarray, None]: ...
 @overload

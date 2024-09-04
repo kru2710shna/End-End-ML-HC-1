@@ -7,27 +7,27 @@ from typing import (
     TYPE_CHECKING,
     Any,
 )
+import warnings
 
 import numpy as np
 
-from pandas._libs import lib
+from pandas._typing import AnyArrayLike
+from pandas.util._exceptions import find_stack_level
 
 from pandas.core.dtypes.common import (
     is_array_like,
     is_bool_dtype,
+    is_extension_array_dtype,
     is_integer,
     is_integer_dtype,
     is_list_like,
 )
-from pandas.core.dtypes.dtypes import ExtensionDtype
 from pandas.core.dtypes.generic import (
     ABCIndex,
     ABCSeries,
 )
 
 if TYPE_CHECKING:
-    from pandas._typing import AnyArrayLike
-
     from pandas.core.frame import DataFrame
     from pandas.core.indexes.base import Index
 
@@ -52,10 +52,14 @@ def is_valid_positional_slice(slc: slice) -> bool:
     A valid positional slice may also be interpreted as a label-based slice
     depending on the index being sliced.
     """
+
+    def is_int_or_none(val):
+        return val is None or is_integer(val)
+
     return (
-        lib.is_int_or_none(slc.start)
-        and lib.is_int_or_none(slc.stop)
-        and lib.is_int_or_none(slc.step)
+        is_int_or_none(slc.start)
+        and is_int_or_none(slc.stop)
+        and is_int_or_none(slc.step)
     )
 
 
@@ -329,18 +333,22 @@ def length_of_indexer(indexer, target=None) -> int:
     raise AssertionError("cannot find the length of the indexer")
 
 
-def disallow_ndim_indexing(result) -> None:
+def deprecate_ndim_indexing(result, stacklevel: int = 3) -> None:
     """
-    Helper function to disallow multi-dimensional indexing on 1D Series/Index.
+    Helper function to raise the deprecation warning for multi-dimensional
+    indexing on 1D Series/Index.
 
     GH#27125 indexer like idx[:, None] expands dim, but we cannot do that
-    and keep an index, so we used to return ndarray, which was deprecated
-    in GH#30588.
+    and keep an index, so we currently return ndarray, which is deprecated
+    (Deprecation GH#30588).
     """
     if np.ndim(result) > 1:
-        raise ValueError(
-            "Multi-dimensional indexing (e.g. `obj[:, None]`) is no longer "
-            "supported. Convert to a numpy array before indexing instead."
+        warnings.warn(
+            "Support for multi-dimensional indexing (e.g. `obj[:, None]`) "
+            "is deprecated and will be removed in a future "
+            "version.  Convert to a numpy array before indexing instead.",
+            FutureWarning,
+            stacklevel=find_stack_level(),
         )
 
 
@@ -359,9 +367,12 @@ def unpack_1tuple(tup):
 
         if isinstance(tup, list):
             # GH#31299
-            raise ValueError(
+            warnings.warn(
                 "Indexing with a single-item list containing a "
-                "slice is not allowed. Pass a tuple instead.",
+                "slice is deprecated and will raise in a future "
+                "version.  Pass a tuple instead.",
+                FutureWarning,
+                stacklevel=find_stack_level(),
             )
 
         return tup[0]
@@ -428,6 +439,8 @@ def check_array_indexer(array: AnyArrayLike, indexer: Any) -> Any:
 
     Non-array indexers (integer, slice, Ellipsis, tuples, ..) are passed
     through as is.
+
+    .. versionadded:: 1.0.0
 
     Parameters
     ----------
@@ -529,7 +542,7 @@ def check_array_indexer(array: AnyArrayLike, indexer: Any) -> Any:
 
     dtype = indexer.dtype
     if is_bool_dtype(dtype):
-        if isinstance(dtype, ExtensionDtype):
+        if is_extension_array_dtype(dtype):
             indexer = indexer.to_numpy(dtype=bool, na_value=False)
         else:
             indexer = np.asarray(indexer, dtype=bool)

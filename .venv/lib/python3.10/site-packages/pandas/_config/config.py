@@ -56,10 +56,11 @@ from contextlib import (
 )
 import re
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Generic,
+    Iterable,
+    Iterator,
     NamedTuple,
     cast,
 )
@@ -70,12 +71,6 @@ from pandas._typing import (
     T,
 )
 from pandas.util._exceptions import find_stack_level
-
-if TYPE_CHECKING:
-    from collections.abc import (
-        Generator,
-        Iterable,
-    )
 
 
 class DeprecatedOption(NamedTuple):
@@ -111,12 +106,6 @@ class OptionError(AttributeError, KeyError):
     Exception raised for pandas.options.
 
     Backwards compatible with KeyError checks.
-
-    Examples
-    --------
-    >>> pd.options.context
-    Traceback (most recent call last):
-    OptionError: No such option
     """
 
 
@@ -160,7 +149,7 @@ def _set_option(*args, **kwargs) -> None:
     silent = kwargs.pop("silent", False)
 
     if kwargs:
-        kwarg = next(iter(kwargs.keys()))
+        kwarg = list(kwargs.keys())[0]
         raise TypeError(f'_set_option() got an unexpected keyword argument "{kwarg}"')
 
     for k, v in zip(args[::2], args[1::2]):
@@ -171,8 +160,8 @@ def _set_option(*args, **kwargs) -> None:
             o.validator(v)
 
         # walk the nested dict
-        root, k_root = _get_root(key)
-        root[k_root] = v
+        root, k = _get_root(key)
+        root[k] = v
 
         if o.cb:
             if silent:
@@ -183,6 +172,7 @@ def _set_option(*args, **kwargs) -> None:
 
 
 def _describe_option(pat: str = "", _print_desc: bool = True) -> str | None:
+
     keys = _select_options(pat)
     if len(keys) == 0:
         raise OptionError("No such keys(s)")
@@ -196,6 +186,7 @@ def _describe_option(pat: str = "", _print_desc: bool = True) -> str | None:
 
 
 def _reset_option(pat: str, silent: bool = False) -> None:
+
     keys = _select_options(pat)
 
     if len(keys) == 0:
@@ -219,8 +210,6 @@ def get_default_val(pat: str):
 
 class DictWrapper:
     """provide attribute-style access to a nested dict"""
-
-    d: dict[str, Any]
 
     def __init__(self, d: dict[str, Any], prefix: str = "") -> None:
         object.__setattr__(self, "d", d)
@@ -252,7 +241,7 @@ class DictWrapper:
         else:
             return _get_option(prefix)
 
-    def __dir__(self) -> list[str]:
+    def __dir__(self) -> Iterable[str]:
         return list(self.d.keys())
 
 
@@ -313,11 +302,6 @@ Please reference the :ref:`User Guide <options>` for more information.
 The available options with its descriptions:
 
 {opts_desc}
-
-Examples
---------
->>> pd.get_option('display.max_columns')  # doctest: +SKIP
-4
 """
 
 _set_option_tmpl = """
@@ -354,17 +338,6 @@ Please reference the :ref:`User Guide <options>` for more information.
 The available options with its descriptions:
 
 {opts_desc}
-
-Examples
---------
->>> pd.set_option('display.max_columns', 4)
->>> df = pd.DataFrame([[1, 2, 3, 4, 5], [6, 7, 8, 9, 10]])
->>> df
-   0  1  ...  3   4
-0  1  2  ...  4   5
-1  6  7  ...  9  10
-[2 rows x 5 columns]
->>> pd.reset_option('display.max_columns')
 """
 
 _describe_option_tmpl = """
@@ -399,12 +372,6 @@ Please reference the :ref:`User Guide <options>` for more information.
 The available options with its descriptions:
 
 {opts_desc}
-
-Examples
---------
->>> pd.describe_option('display.max_columns')  # doctest: +SKIP
-display.max_columns : int
-    If max_cols is exceeded, switch to truncate view...
 """
 
 _reset_option_tmpl = """
@@ -437,10 +404,6 @@ Please reference the :ref:`User Guide <options>` for more information.
 The available options with its descriptions:
 
 {opts_desc}
-
-Examples
---------
->>> pd.reset_option('display.max_columns')  # doctest: +SKIP
 """
 
 # bind the functions with their docstrings into a Callable
@@ -463,7 +426,6 @@ class option_context(ContextDecorator):
 
     Examples
     --------
-    >>> from pandas import option_context
     >>> with option_context('display.max_rows', 10, 'display.max_columns', 5):
     ...     pass
     """
@@ -477,7 +439,7 @@ class option_context(ContextDecorator):
         self.ops = list(zip(args[::2], args[1::2]))
 
     def __enter__(self) -> None:
-        self.undo = [(pat, _get_option(pat)) for pat, val in self.ops]
+        self.undo = [(pat, _get_option(pat, silent=True)) for pat, val in self.ops]
 
         for pat, val in self.ops:
             _set_option(pat, val, silent=True)
@@ -739,7 +701,7 @@ def _build_option_description(k: str) -> str:
     return s
 
 
-def pp_options_list(keys: Iterable[str], width: int = 80, _print: bool = False):
+def pp_options_list(keys: Iterable[str], width=80, _print: bool = False):
     """Builds a concise listing of available options, grouped by prefix"""
     from itertools import groupby
     from textwrap import wrap
@@ -778,7 +740,7 @@ def pp_options_list(keys: Iterable[str], width: int = 80, _print: bool = False):
 
 
 @contextmanager
-def config_prefix(prefix: str) -> Generator[None, None, None]:
+def config_prefix(prefix) -> Iterator[None]:
     """
     contextmanager for multiple invocations of API with a common prefix
 
@@ -805,7 +767,7 @@ def config_prefix(prefix: str) -> Generator[None, None, None]:
     # Note: reset_option relies on set_option, and on key directly
     # it does not fit in to this monkey-patching scheme
 
-    global register_option, get_option, set_option
+    global register_option, get_option, set_option, reset_option
 
     def wrap(func: F) -> F:
         def inner(key: str, *args, **kwds):
@@ -880,11 +842,13 @@ def is_instance_factory(_type) -> Callable[[Any], None]:
 
 
 def is_one_of_factory(legal_values) -> Callable[[Any], None]:
+
     callables = [c for c in legal_values if callable(c)]
     legal_values = [c for c in legal_values if not callable(c)]
 
     def inner(x) -> None:
         if x not in legal_values:
+
             if not any(c(x) for c in callables):
                 uvals = [str(lval) for lval in legal_values]
                 pp_values = "|".join(uvals)

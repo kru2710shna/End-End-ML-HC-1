@@ -22,49 +22,39 @@ from pandas.core.shared_docs import _shared_docs
 from pandas.io.excel._base import BaseExcelReader
 
 if TYPE_CHECKING:
-    from odf.opendocument import OpenDocument
-
     from pandas._libs.tslibs.nattype import NaTType
 
 
 @doc(storage_options=_shared_docs["storage_options"])
-class ODFReader(BaseExcelReader["OpenDocument"]):
+class ODFReader(BaseExcelReader):
+    """
+    Read tables out of OpenDocument formatted files.
+
+    Parameters
+    ----------
+    filepath_or_buffer : str, path to be parsed or
+        an open readable stream.
+    {storage_options}
+    """
+
     def __init__(
         self,
         filepath_or_buffer: FilePath | ReadBuffer[bytes],
-        storage_options: StorageOptions | None = None,
-        engine_kwargs: dict | None = None,
+        storage_options: StorageOptions = None,
     ) -> None:
-        """
-        Read tables out of OpenDocument formatted files.
-
-        Parameters
-        ----------
-        filepath_or_buffer : str, path to be parsed or
-            an open readable stream.
-        {storage_options}
-        engine_kwargs : dict, optional
-            Arbitrary keyword arguments passed to excel engine.
-        """
         import_optional_dependency("odf")
-        super().__init__(
-            filepath_or_buffer,
-            storage_options=storage_options,
-            engine_kwargs=engine_kwargs,
-        )
+        super().__init__(filepath_or_buffer, storage_options=storage_options)
 
     @property
-    def _workbook_class(self) -> type[OpenDocument]:
+    def _workbook_class(self):
         from odf.opendocument import OpenDocument
 
         return OpenDocument
 
-    def load_workbook(
-        self, filepath_or_buffer: FilePath | ReadBuffer[bytes], engine_kwargs
-    ) -> OpenDocument:
+    def load_workbook(self, filepath_or_buffer: FilePath | ReadBuffer[bytes]):
         from odf.opendocument import load
 
-        return load(filepath_or_buffer, **engine_kwargs)
+        return load(filepath_or_buffer)
 
     @property
     def empty_value(self) -> str:
@@ -100,7 +90,7 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
         raise ValueError(f"sheet {name} not found")
 
     def get_sheet_data(
-        self, sheet, file_rows_needed: int | None = None
+        self, sheet, convert_float: bool, file_rows_needed: int | None = None
     ) -> list[list[Scalar | NaTType]]:
         """
         Parse an ODF Table into a list of lists
@@ -132,7 +122,7 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
 
             for sheet_cell in sheet_cells:
                 if sheet_cell.qname == table_cell_name:
-                    value = self._get_cell_value(sheet_cell)
+                    value = self._get_cell_value(sheet_cell, convert_float)
                 else:
                     value = self.empty_value
 
@@ -150,13 +140,14 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
                 max_row_len = len(table_row)
 
             row_repeat = self._get_row_repeat(sheet_row)
-            if len(table_row) == 0:
+            if self._is_empty_row(sheet_row):
                 empty_rows += row_repeat
             else:
                 # add blank rows to our table
                 table.extend([[self.empty_value]] * empty_rows)
                 empty_rows = 0
-                table.extend(table_row for _ in range(row_repeat))
+                for _ in range(row_repeat):
+                    table.append(table_row)
             if file_rows_needed is not None and len(table) >= file_rows_needed:
                 break
 
@@ -182,7 +173,17 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
 
         return int(cell.attributes.get((TABLENS, "number-columns-repeated"), 1))
 
-    def _get_cell_value(self, cell) -> Scalar | NaTType:
+    def _is_empty_row(self, row) -> bool:
+        """
+        Helper function to find empty rows
+        """
+        for column in row.childNodes:
+            if len(column.childNodes) > 0:
+                return False
+
+        return True
+
+    def _get_cell_value(self, cell, convert_float: bool) -> Scalar | NaTType:
         from odf.namespaces import OFFICENS
 
         if str(cell) == "#N/A":
@@ -198,9 +199,10 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
         elif cell_type == "float":
             # GH5394
             cell_value = float(cell.attributes.get((OFFICENS, "value")))
-            val = int(cell_value)
-            if val == cell_value:
-                return val
+            if convert_float:
+                val = int(cell_value)
+                if val == cell_value:
+                    return val
             return cell_value
         elif cell_type == "percentage":
             cell_value = cell.attributes.get((OFFICENS, "value"))
@@ -212,9 +214,9 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
             return float(cell_value)
         elif cell_type == "date":
             cell_value = cell.attributes.get((OFFICENS, "date-value"))
-            return pd.Timestamp(cell_value)
+            return pd.to_datetime(cell_value)
         elif cell_type == "time":
-            stamp = pd.Timestamp(str(cell))
+            stamp = pd.to_datetime(str(cell))
             # cast needed here because Scalar doesn't include datetime.time
             return cast(Scalar, stamp.time())
         else:
@@ -228,10 +230,8 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
         """
         from odf.element import Element
         from odf.namespaces import TEXTNS
-        from odf.office import Annotation
         from odf.text import S
 
-        office_annotation = Annotation().qname
         text_s = S().qname
 
         value = []
@@ -241,8 +241,6 @@ class ODFReader(BaseExcelReader["OpenDocument"]):
                 if fragment.qname == text_s:
                     spaces = int(fragment.attributes.get((TEXTNS, "c"), 1))
                     value.append(" " * spaces)
-                elif fragment.qname == office_annotation:
-                    continue
                 else:
                     # recursive impl needed in case of nested fragments
                     # with multiple spaces

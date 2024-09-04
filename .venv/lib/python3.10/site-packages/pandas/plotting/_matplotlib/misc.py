@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import random
-from typing import TYPE_CHECKING
+from typing import (
+    TYPE_CHECKING,
+    Hashable,
+)
 
-from matplotlib import patches
 import matplotlib.lines as mlines
+import matplotlib.patches as patches
 import numpy as np
 
 from pandas.core.dtypes.missing import notna
@@ -19,8 +22,6 @@ from pandas.plotting._matplotlib.tools import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Hashable
-
     from matplotlib.axes import Axes
     from matplotlib.figure import Figure
 
@@ -34,7 +35,7 @@ if TYPE_CHECKING:
 def scatter_matrix(
     frame: DataFrame,
     alpha: float = 0.5,
-    figsize: tuple[float, float] | None = None,
+    figsize=None,
     ax=None,
     grid: bool = False,
     diagonal: str = "hist",
@@ -193,13 +194,14 @@ def radviz(
     ax.add_patch(patches.Circle((0.0, 0.0), radius=1.0, facecolor="none"))
 
     for xy, name in zip(s, df.columns):
+
         ax.add_patch(patches.Circle(xy, radius=0.025, facecolor="gray"))
 
         if xy[0] < 0.0 and xy[1] < 0.0:
             ax.text(
                 xy[0] - 0.025, xy[1] - 0.025, name, ha="right", va="top", size="small"
             )
-        elif xy[0] < 0.0 <= xy[1]:
+        elif xy[0] < 0.0 and xy[1] >= 0.0:
             ax.text(
                 xy[0] - 0.025,
                 xy[1] + 0.025,
@@ -208,7 +210,7 @@ def radviz(
                 va="bottom",
                 size="small",
             )
-        elif xy[1] < 0.0 <= xy[0]:
+        elif xy[0] >= 0.0 and xy[1] < 0.0:
             ax.text(
                 xy[0] + 0.025, xy[1] - 0.025, name, ha="left", va="top", size="small"
             )
@@ -295,6 +297,7 @@ def bootstrap_plot(
     samples: int = 500,
     **kwds,
 ) -> Figure:
+
     import matplotlib.pyplot as plt
 
     # TODO: is the failure mentioned below still relevant?
@@ -384,7 +387,7 @@ def parallel_coordinates(
     elif xticks is not None:
         if not np.all(np.isreal(xticks)):
             raise ValueError("xticks specified must be numeric")
-        if len(xticks) != ncols:
+        elif len(xticks) != ncols:
             raise ValueError("Length of xticks must match number of columns")
         x = xticks
     else:

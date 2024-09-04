@@ -11,6 +11,7 @@ from pandas.tests.extension.base import BaseOpsUtil
 
 class ComparisonOps(BaseOpsUtil):
     def _compare_other(self, data, op, other):
+
         # array
         result = pd.Series(op(data, other))
         expected = pd.Series(op(data._data, other), dtype="boolean")
@@ -24,11 +25,11 @@ class ComparisonOps(BaseOpsUtil):
         ser = pd.Series(data)
         result = op(ser, other)
 
-        # Set nullable dtype here to avoid upcasting when setting to pd.NA below
-        expected = op(pd.Series(data._data), other).astype("boolean")
+        expected = op(pd.Series(data._data), other)
 
         # fill the nan locations
         expected[data._mask] = pd.NA
+        expected = expected.astype("boolean")
 
         tm.assert_series_equal(result, expected)
 
@@ -110,7 +111,7 @@ class NumericOps:
         result = ser == "a"
         expected = pd.Series([False, pd.NA], dtype="boolean")
 
-        tm.assert_series_equal(result, expected)
+        self.assert_series_equal(result, expected)
 
     def test_ufunc_with_out(self, dtype):
         arr = pd.array([1, 2, 3], dtype=dtype)

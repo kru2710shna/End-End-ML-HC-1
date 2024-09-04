@@ -1,12 +1,8 @@
 import numpy as np
 import pytest
 
-from pandas import (
-    DataFrame,
-    Index,
-    Series,
-    date_range,
-)
+from pandas import DataFrame
+import pandas._testing as tm
 from pandas.core.groupby.base import (
     reduction_kernels,
     transformation_kernels,
@@ -34,31 +30,46 @@ def observed(request):
 
 
 @pytest.fixture
+def mframe(multiindex_dataframe_random_data):
+    return multiindex_dataframe_random_data
+
+
+@pytest.fixture
 def df():
     return DataFrame(
         {
             "A": ["foo", "bar", "foo", "bar", "foo", "bar", "foo", "foo"],
             "B": ["one", "one", "two", "three", "two", "two", "one", "three"],
-            "C": np.random.default_rng(2).standard_normal(8),
-            "D": np.random.default_rng(2).standard_normal(8),
+            "C": np.random.randn(8),
+            "D": np.random.randn(8),
         }
     )
 
 
 @pytest.fixture
 def ts():
-    return Series(
-        np.random.default_rng(2).standard_normal(30),
-        index=date_range("2000-01-01", periods=30, freq="B"),
-    )
+    return tm.makeTimeSeries()
 
 
 @pytest.fixture
-def tsframe():
+def tsd():
+    return tm.getTimeSeriesData()
+
+
+@pytest.fixture
+def tsframe(tsd):
+    return DataFrame(tsd)
+
+
+@pytest.fixture
+def df_mixed_floats():
     return DataFrame(
-        np.random.default_rng(2).standard_normal((30, 4)),
-        columns=Index(list("ABCD"), dtype=object),
-        index=date_range("2000-01-01", periods=30, freq="B"),
+        {
+            "A": ["foo", "bar", "foo", "bar", "foo", "bar", "foo", "foo"],
+            "B": ["one", "one", "two", "three", "two", "two", "one", "three"],
+            "C": np.random.randn(8),
+            "D": np.array(np.random.randn(8), dtype="float32"),
+        }
     )
 
 
@@ -105,9 +116,9 @@ def three_group():
                 "shiny",
                 "shiny",
             ],
-            "D": np.random.default_rng(2).standard_normal(11),
-            "E": np.random.default_rng(2).standard_normal(11),
-            "F": np.random.default_rng(2).standard_normal(11),
+            "D": np.random.randn(11),
+            "E": np.random.randn(11),
+            "F": np.random.randn(11),
         }
     )
 
@@ -185,23 +196,8 @@ def nopython(request):
         ("sum", {}),
         ("min", {}),
         ("max", {}),
-        ("sum", {"min_count": 2}),
-        ("min", {"min_count": 2}),
-        ("max", {"min_count": 2}),
     ],
-    ids=[
-        "mean",
-        "var_1",
-        "var_0",
-        "std_1",
-        "std_0",
-        "sum",
-        "min",
-        "max",
-        "sum-min_count",
-        "min-min_count",
-        "max-min_count",
-    ],
+    ids=["mean", "var_1", "var_0", "std_1", "std_0", "sum", "min", "max"],
 )
 def numba_supported_reductions(request):
     """reductions supported with engine='numba'"""

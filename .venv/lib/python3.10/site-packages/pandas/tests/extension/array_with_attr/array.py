@@ -5,17 +5,15 @@ Test extension array that has custom attribute information (not stored on the dt
 from __future__ import annotations
 
 import numbers
-from typing import TYPE_CHECKING
 
 import numpy as np
+
+from pandas._typing import type_t
 
 from pandas.core.dtypes.base import ExtensionDtype
 
 import pandas as pd
 from pandas.core.arrays import ExtensionArray
-
-if TYPE_CHECKING:
-    from pandas._typing import type_t
 
 
 class FloatAttrDtype(ExtensionDtype):
@@ -48,11 +46,8 @@ class FloatAttrArray(ExtensionArray):
         self.attr = attr
 
     @classmethod
-    def _from_sequence(cls, scalars, *, dtype=None, copy=False):
-        if not copy:
-            data = np.asarray(scalars, dtype="float64")
-        else:
-            data = np.array(scalars, dtype="float64", copy=copy)
+    def _from_sequence(cls, scalars, dtype=None, copy=False):
+        data = np.array(scalars, dtype="float64", copy=copy)
         return cls(data)
 
     def __getitem__(self, item):

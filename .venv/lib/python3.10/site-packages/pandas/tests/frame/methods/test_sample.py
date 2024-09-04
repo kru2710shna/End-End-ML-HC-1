@@ -11,13 +11,14 @@ import pandas.core.common as com
 
 
 class TestSample:
-    @pytest.fixture
-    def obj(self, frame_or_series):
-        if frame_or_series is Series:
-            arr = np.random.default_rng(2).standard_normal(10)
+    @pytest.fixture(params=[Series, DataFrame])
+    def obj(self, request):
+        klass = request.param
+        if klass is Series:
+            arr = np.random.randn(10)
         else:
-            arr = np.random.default_rng(2).standard_normal((10, 10))
-        return frame_or_series(arr, dtype=None)
+            arr = np.random.randn(10, 10)
+        return klass(arr, dtype=None)
 
     @pytest.mark.parametrize("test", list(range(10)))
     def test_sample(self, test, obj):
@@ -26,7 +27,7 @@ class TestSample:
         # Check for stability when receives seed or random state -- run 10
         # times.
 
-        seed = np.random.default_rng(2).integers(0, 100)
+        seed = np.random.randint(0, 100)
         tm.assert_equal(
             obj.sample(n=4, random_state=seed), obj.sample(n=4, random_state=seed)
         )
@@ -37,32 +38,25 @@ class TestSample:
         )
 
         tm.assert_equal(
-            obj.sample(n=4, random_state=np.random.default_rng(test)),
-            obj.sample(n=4, random_state=np.random.default_rng(test)),
+            obj.sample(n=4, random_state=np.random.RandomState(test)),
+            obj.sample(n=4, random_state=np.random.RandomState(test)),
         )
 
         tm.assert_equal(
-            obj.sample(frac=0.7, random_state=np.random.default_rng(test)),
-            obj.sample(frac=0.7, random_state=np.random.default_rng(test)),
+            obj.sample(frac=0.7, random_state=np.random.RandomState(test)),
+            obj.sample(frac=0.7, random_state=np.random.RandomState(test)),
         )
 
         tm.assert_equal(
-            obj.sample(
-                frac=2,
-                replace=True,
-                random_state=np.random.default_rng(test),
-            ),
-            obj.sample(
-                frac=2,
-                replace=True,
-                random_state=np.random.default_rng(test),
-            ),
+            obj.sample(frac=2, replace=True, random_state=np.random.RandomState(test)),
+            obj.sample(frac=2, replace=True, random_state=np.random.RandomState(test)),
         )
 
         os1, os2 = [], []
         for _ in range(2):
-            os1.append(obj.sample(n=4, random_state=test))
-            os2.append(obj.sample(frac=0.7, random_state=test))
+            np.random.seed(test)
+            os1.append(obj.sample(n=4))
+            os2.append(obj.sample(frac=0.7))
         tm.assert_equal(*os1)
         tm.assert_equal(*os2)
 
@@ -180,7 +174,7 @@ class TestSample:
     def test_sample_generator(self, frame_or_series):
         # GH#38100
         obj = frame_or_series(np.arange(100))
-        rng = np.random.default_rng(2)
+        rng = np.random.default_rng()
 
         # Consecutive calls should advance the seed
         result1 = obj.sample(n=50, random_state=rng)
@@ -313,6 +307,7 @@ class TestSampleDataFrame:
         )
 
     def test_sample_aligns_weights_with_frame(self):
+
         # Test that function aligns weights with frame
         df = DataFrame({"col1": [5, 6, 7], "col2": ["a", "b", "c"]}, index=[9, 5, 3])
         ser = Series([1, 0, 0], index=[3, 5, 9])
@@ -336,9 +331,7 @@ class TestSampleDataFrame:
     def test_sample_is_copy(self):
         # GH#27357, GH#30784: ensure the result of sample is an actual copy and
         # doesn't track the parent dataframe / doesn't give SettingWithCopy warnings
-        df = DataFrame(
-            np.random.default_rng(2).standard_normal((10, 3)), columns=["a", "b", "c"]
-        )
+        df = DataFrame(np.random.randn(10, 3), columns=["a", "b", "c"])
         df2 = df.sample(3)
 
         with tm.assert_produces_warning(None):

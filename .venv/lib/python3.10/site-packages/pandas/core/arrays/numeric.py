@@ -5,6 +5,8 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Mapping,
+    TypeVar,
 )
 
 import numpy as np
@@ -13,11 +15,19 @@ from pandas._libs import (
     lib,
     missing as libmissing,
 )
+from pandas._typing import (
+    Dtype,
+    DtypeObj,
+    npt,
+)
 from pandas.errors import AbstractMethodError
 from pandas.util._decorators import cache_readonly
 
 from pandas.core.dtypes.common import (
+    is_bool_dtype,
+    is_float_dtype,
     is_integer_dtype,
+    is_object_dtype,
     is_string_dtype,
     pandas_dtype,
 )
@@ -28,16 +38,10 @@ from pandas.core.arrays.masked import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     import pyarrow
 
-    from pandas._typing import (
-        Dtype,
-        DtypeObj,
-        Self,
-        npt,
-    )
+
+T = TypeVar("T", bound="NumericArray")
 
 
 class NumericDtype(BaseMaskedDtype):
@@ -74,13 +78,11 @@ class NumericDtype(BaseMaskedDtype):
         array_class = self.construct_array_type()
 
         pyarrow_type = pyarrow.from_numpy_dtype(self.type)
-        if not array.type.equals(pyarrow_type) and not pyarrow.types.is_null(
-            array.type
-        ):
+        if not array.type.equals(pyarrow_type):
             # test_from_arrow_type_error raise for string, but allow
             #  through itemsize conversion GH#31896
             rt_dtype = pandas_dtype(array.type.to_pandas_dtype())
-            if rt_dtype.kind not in "iuf":
+            if rt_dtype.kind not in ["i", "u", "f"]:
                 # Could allow "c" or potentially disallow float<->int conversion,
                 #  but at the moment we specifically test that uint<->int works
                 raise TypeError(
@@ -89,19 +91,30 @@ class NumericDtype(BaseMaskedDtype):
 
             array = array.cast(pyarrow_type)
 
-        if isinstance(array, pyarrow.ChunkedArray):
-            # TODO this "if" can be removed when requiring pyarrow >= 10.0, which fixed
-            # combine_chunks for empty arrays https://github.com/apache/arrow/pull/13757
-            if array.num_chunks == 0:
-                array = pyarrow.array([], type=array.type)
-            else:
-                array = array.combine_chunks()
+        if isinstance(array, pyarrow.Array):
+            chunks = [array]
+        else:
+            # pyarrow.ChunkedArray
+            chunks = array.chunks
 
-        data, mask = pyarrow_array_to_numpy_and_mask(array, dtype=self.numpy_dtype)
-        return array_class(data.copy(), ~mask, copy=False)
+        results = []
+        for arr in chunks:
+            data, mask = pyarrow_array_to_numpy_and_mask(arr, dtype=self.numpy_dtype)
+            num_arr = array_class(data.copy(), ~mask, copy=False)
+            results.append(num_arr)
+
+        if not results:
+            return array_class(
+                np.array([], dtype=self.numpy_dtype), np.array([], dtype=np.bool_)
+            )
+        elif len(results) == 1:
+            # avoid additional copy in _concat_same_type
+            return results[0]
+        else:
+            return array_class._concat_same_type(results)
 
     @classmethod
-    def _get_dtype_mapping(cls) -> Mapping[np.dtype, NumericDtype]:
+    def _str_to_dtype_mapping(cls) -> Mapping[str, NumericDtype]:
         raise AbstractMethodError(cls)
 
     @classmethod
@@ -115,9 +128,9 @@ class NumericDtype(BaseMaskedDtype):
             dtype = dtype.lower()
 
         if not isinstance(dtype, NumericDtype):
-            mapping = cls._get_dtype_mapping()
+            mapping = cls._str_to_dtype_mapping()
             try:
-                dtype = mapping[np.dtype(dtype)]
+                dtype = mapping[str(np.dtype(dtype))]
             except KeyError as err:
                 raise ValueError(f"invalid dtype specified {dtype}") from err
         return dtype
@@ -132,12 +145,9 @@ class NumericDtype(BaseMaskedDtype):
         raise AbstractMethodError(cls)
 
 
-def _coerce_to_data_and_mask(
-    values, dtype, copy: bool, dtype_cls: type[NumericDtype], default_dtype: np.dtype
-):
+def _coerce_to_data_and_mask(values, mask, dtype, copy, dtype_cls, default_dtype):
     checker = dtype_cls._checker
 
-    mask = None
     inferred_type = None
 
     if dtype is None and hasattr(values, "dtype"):
@@ -158,25 +168,20 @@ def _coerce_to_data_and_mask(
             mask = mask.copy()
         return values, mask, dtype, inferred_type
 
-    original = values
-    if not copy:
-        values = np.asarray(values)
-    else:
-        values = np.array(values, copy=copy)
+    values = np.array(values, copy=copy)
     inferred_type = None
-    if values.dtype == object or is_string_dtype(values.dtype):
+    if is_object_dtype(values.dtype) or is_string_dtype(values.dtype):
         inferred_type = lib.infer_dtype(values, skipna=True)
-        if inferred_type == "boolean" and dtype is None:
+        if inferred_type == "empty":
+            pass
+        elif inferred_type == "boolean":
             name = dtype_cls.__name__.strip("_")
             raise TypeError(f"{values.dtype} cannot be converted to {name}")
 
-    elif values.dtype.kind == "b" and checker(dtype):
-        if not copy:
-            values = np.asarray(values, dtype=default_dtype)
-        else:
-            values = np.array(values, dtype=default_dtype, copy=copy)
+    elif is_bool_dtype(values) and checker(dtype):
+        values = np.array(values, dtype=default_dtype, copy=copy)
 
-    elif values.dtype.kind not in "iuf":
+    elif not (is_integer_dtype(values) or is_float_dtype(values)):
         name = dtype_cls.__name__.strip("_")
         raise TypeError(f"{values.dtype} cannot be converted to {name}")
 
@@ -184,11 +189,7 @@ def _coerce_to_data_and_mask(
         raise TypeError("values must be a 1D list-like")
 
     if mask is None:
-        if values.dtype.kind in "iu":
-            # fastpath
-            mask = np.zeros(len(values), dtype=np.bool_)
-        else:
-            mask = libmissing.is_numeric_na(values)
+        mask = libmissing.is_numeric_na(values)
     else:
         assert len(mask) == len(values)
 
@@ -199,23 +200,7 @@ def _coerce_to_data_and_mask(
     if dtype is None:
         dtype = default_dtype
     else:
-        dtype = dtype.numpy_dtype
-
-    if is_integer_dtype(dtype) and values.dtype.kind == "f" and len(values) > 0:
-        if mask.all():
-            values = np.ones(values.shape, dtype=dtype)
-        else:
-            idx = np.nanargmax(values)
-            if int(values[idx]) != original[idx]:
-                # We have ints that lost precision during the cast.
-                inferred_type = lib.infer_dtype(original, skipna=True)
-                if (
-                    inferred_type not in ["floating", "mixed-integer-float"]
-                    and not mask.any()
-                ):
-                    values = np.asarray(original, dtype=dtype)
-                else:
-                    values = np.asarray(original, dtype="object")
+        dtype = dtype.type
 
     # we copy as need to coerce here
     if mask.any():
@@ -260,8 +245,8 @@ class NumericArray(BaseMaskedArray):
 
     @cache_readonly
     def dtype(self) -> NumericDtype:
-        mapping = self._dtype_cls._get_dtype_mapping()
-        return mapping[self._data.dtype]
+        mapping = self._dtype_cls._str_to_dtype_mapping()
+        return mapping[str(self._data.dtype)]
 
     @classmethod
     def _coerce_to_array(
@@ -269,18 +254,19 @@ class NumericArray(BaseMaskedArray):
     ) -> tuple[np.ndarray, np.ndarray]:
         dtype_cls = cls._dtype_cls
         default_dtype = dtype_cls._default_np_dtype
+        mask = None
         values, mask, _, _ = _coerce_to_data_and_mask(
-            value, dtype, copy, dtype_cls, default_dtype
+            value, mask, dtype, copy, dtype_cls, default_dtype
         )
         return values, mask
 
     @classmethod
     def _from_sequence_of_strings(
-        cls, strings, *, dtype: Dtype | None = None, copy: bool = False
-    ) -> Self:
+        cls: type[T], strings, *, dtype: Dtype | None = None, copy: bool = False
+    ) -> T:
         from pandas.core.tools.numeric import to_numeric
 
-        scalars = to_numeric(strings, errors="raise", dtype_backend="numpy_nullable")
+        scalars = to_numeric(strings, errors="raise")
         return cls._from_sequence(scalars, dtype=dtype, copy=copy)
 
     _HANDLED_TYPES = (np.ndarray, numbers.Number)

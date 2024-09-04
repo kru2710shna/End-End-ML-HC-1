@@ -9,8 +9,10 @@ from datetime import datetime
 
 import pytest
 
-import pandas._testing as tm
+from pandas._libs.tslibs.offsets import QuarterOffset
+
 from pandas.tests.tseries.offsets.common import (
+    Base,
     assert_is_on_offset,
     assert_offset_equal,
 )
@@ -45,7 +47,9 @@ def test_on_offset(offset):
         assert res == slow_version
 
 
-class TestBQuarterBegin:
+class TestBQuarterBegin(Base):
+    _offset: type[QuarterOffset] = BQuarterBegin
+
     def test_repr(self):
         expected = "<BusinessQuarterBegin: startingMonth=3>"
         assert repr(BQuarterBegin()) == expected
@@ -55,12 +59,9 @@ class TestBQuarterBegin:
         assert repr(BQuarterBegin(startingMonth=1)) == expected
 
     def test_is_anchored(self):
-        msg = "BQuarterBegin.is_anchored is deprecated "
-
-        with tm.assert_produces_warning(FutureWarning, match=msg):
-            assert BQuarterBegin(startingMonth=1).is_anchored()
-            assert BQuarterBegin().is_anchored()
-            assert not BQuarterBegin(2, startingMonth=1).is_anchored()
+        assert BQuarterBegin(startingMonth=1).is_anchored()
+        assert BQuarterBegin().is_anchored()
+        assert not BQuarterBegin(2, startingMonth=1).is_anchored()
 
     def test_offset_corner_case(self):
         # corner
@@ -171,7 +172,9 @@ class TestBQuarterBegin:
             assert_offset_equal(offset, base, expected)
 
 
-class TestBQuarterEnd:
+class TestBQuarterEnd(Base):
+    _offset: type[QuarterOffset] = BQuarterEnd
+
     def test_repr(self):
         expected = "<BusinessQuarterEnd: startingMonth=3>"
         assert repr(BQuarterEnd()) == expected
@@ -181,12 +184,9 @@ class TestBQuarterEnd:
         assert repr(BQuarterEnd(startingMonth=1)) == expected
 
     def test_is_anchored(self):
-        msg = "BQuarterEnd.is_anchored is deprecated "
-
-        with tm.assert_produces_warning(FutureWarning, match=msg):
-            assert BQuarterEnd(startingMonth=1).is_anchored()
-            assert BQuarterEnd().is_anchored()
-            assert not BQuarterEnd(2, startingMonth=1).is_anchored()
+        assert BQuarterEnd(startingMonth=1).is_anchored()
+        assert BQuarterEnd().is_anchored()
+        assert not BQuarterEnd(2, startingMonth=1).is_anchored()
 
     def test_offset_corner_case(self):
         # corner

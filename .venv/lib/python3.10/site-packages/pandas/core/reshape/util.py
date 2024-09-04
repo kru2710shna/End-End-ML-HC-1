@@ -1,13 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 
-from pandas.core.dtypes.common import is_list_like
+from pandas._typing import NumpyIndexT
 
-if TYPE_CHECKING:
-    from pandas._typing import NumpyIndexT
+from pandas.core.dtypes.common import is_list_like
 
 
 def cartesian_product(X) -> list[np.ndarray]:
@@ -44,7 +41,7 @@ def cartesian_product(X) -> list[np.ndarray]:
         return []
 
     lenX = np.fromiter((len(x) for x in X), dtype=np.intp)
-    cumprodX = np.cumprod(lenX)
+    cumprodX = np.cumproduct(lenX)
 
     if np.any(cumprodX < 0):
         raise ValueError("Product space too large to allocate arrays!")
@@ -63,7 +60,7 @@ def cartesian_product(X) -> list[np.ndarray]:
     return [
         tile_compat(
             np.repeat(x, b[i]),
-            np.prod(a[i]),
+            np.product(a[i]),  # pyright: ignore[reportGeneralTypeIssues]
         )
         for i, x in enumerate(X)
     ]

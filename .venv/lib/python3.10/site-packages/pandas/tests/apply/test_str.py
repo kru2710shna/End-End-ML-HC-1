@@ -8,9 +8,11 @@ from pandas.core.dtypes.common import is_number
 
 from pandas import (
     DataFrame,
+    Index,
     Series,
 )
 import pandas._testing as tm
+from pandas.core.groupby.base import maybe_normalize_deprecated_kernels
 from pandas.tests.apply.common import (
     frame_transform_kernels,
     series_transform_kernels,
@@ -31,7 +33,7 @@ from pandas.tests.apply.common import (
 @pytest.mark.parametrize("how", ["agg", "apply"])
 def test_apply_with_string_funcs(request, float_frame, func, args, kwds, how):
     if len(args) > 1 and how == "agg":
-        request.applymarker(
+        request.node.add_marker(
             pytest.mark.xfail(
                 raises=TypeError,
                 reason="agg/apply signature mismatch - agg passes 2nd "
@@ -135,9 +137,7 @@ def test_agg_cython_table_series(series, func, expected):
     # GH21224
     # test reducing functions in
     # pandas.core.base.SelectionMixin._cython_table
-    warn = None if isinstance(func, str) else FutureWarning
-    with tm.assert_produces_warning(warn, match="is currently using Series.*"):
-        result = series.agg(func)
+    result = series.agg(func)
     if is_number(expected):
         assert np.isclose(result, expected, equal_nan=True)
     else:
@@ -150,8 +150,8 @@ def test_agg_cython_table_series(series, func, expected):
         tm.get_cython_table_params(
             Series(dtype=np.float64),
             [
-                ("cumprod", Series([], dtype=np.float64)),
-                ("cumsum", Series([], dtype=np.float64)),
+                ("cumprod", Series([], Index([]), dtype=np.float64)),
+                ("cumsum", Series([], Index([]), dtype=np.float64)),
             ],
         ),
         tm.get_cython_table_params(
@@ -170,9 +170,7 @@ def test_agg_cython_table_transform_series(series, func, expected):
     # GH21224
     # test transforming functions in
     # pandas.core.base.SelectionMixin._cython_table (cumprod, cumsum)
-    warn = None if isinstance(func, str) else FutureWarning
-    with tm.assert_produces_warning(warn, match="is currently using Series.*"):
-        result = series.agg(func)
+    result = series.agg(func)
     tm.assert_series_equal(result, expected)
 
 
@@ -215,10 +213,7 @@ def test_agg_cython_table_frame(df, func, expected, axis):
     # GH 21224
     # test reducing functions in
     # pandas.core.base.SelectionMixin._cython_table
-    warn = None if isinstance(func, str) else FutureWarning
-    with tm.assert_produces_warning(warn, match="is currently using DataFrame.*"):
-        # GH#53425
-        result = df.agg(func, axis=axis)
+    result = df.agg(func, axis=axis)
     tm.assert_series_equal(result, expected)
 
 
@@ -241,14 +236,11 @@ def test_agg_cython_table_transform_frame(df, func, expected, axis):
     # GH 21224
     # test transforming functions in
     # pandas.core.base.SelectionMixin._cython_table (cumprod, cumsum)
-    if axis in ("columns", 1):
+    if axis == "columns" or axis == 1:
         # operating blockwise doesn't let us preserve dtypes
         expected = expected.astype("float64")
 
-    warn = None if isinstance(func, str) else FutureWarning
-    with tm.assert_produces_warning(warn, match="is currently using DataFrame.*"):
-        # GH#53425
-        result = df.agg(func, axis=axis)
+    result = df.agg(func, axis=axis)
     tm.assert_frame_equal(result, expected)
 
 
@@ -256,45 +248,36 @@ def test_agg_cython_table_transform_frame(df, func, expected, axis):
 def test_transform_groupby_kernel_series(request, string_series, op):
     # GH 35964
     if op == "ngroup":
-        request.applymarker(
+        request.node.add_marker(
             pytest.mark.xfail(raises=ValueError, reason="ngroup not valid for NDFrame")
         )
+    # TODO(2.0) Remove after pad/backfill deprecation enforced
+    op = maybe_normalize_deprecated_kernels(op)
     args = [0.0] if op == "fillna" else []
     ones = np.ones(string_series.shape[0])
-
-    warn = FutureWarning if op == "fillna" else None
-    msg = "SeriesGroupBy.fillna is deprecated"
-    with tm.assert_produces_warning(warn, match=msg):
-        expected = string_series.groupby(ones).transform(op, *args)
+    expected = string_series.groupby(ones).transform(op, *args)
     result = string_series.transform(op, 0, *args)
     tm.assert_series_equal(result, expected)
 
 
 @pytest.mark.parametrize("op", frame_transform_kernels)
 def test_transform_groupby_kernel_frame(request, axis, float_frame, op):
+    # TODO(2.0) Remove after pad/backfill deprecation enforced
+    op = maybe_normalize_deprecated_kernels(op)
+
     if op == "ngroup":
-        request.applymarker(
+        request.node.add_marker(
             pytest.mark.xfail(raises=ValueError, reason="ngroup not valid for NDFrame")
         )
 
     # GH 35964
 
     args = [0.0] if op == "fillna" else []
-    if axis in (0, "index"):
+    if axis == 0 or axis == "index":
         ones = np.ones(float_frame.shape[0])
-        msg = "The 'axis' keyword in DataFrame.groupby is deprecated"
     else:
         ones = np.ones(float_frame.shape[1])
-        msg = "DataFrame.groupby with axis=1 is deprecated"
-
-    with tm.assert_produces_warning(FutureWarning, match=msg):
-        gb = float_frame.groupby(ones, axis=axis)
-
-    warn = FutureWarning if op == "fillna" else None
-    op_msg = "DataFrameGroupBy.fillna is deprecated"
-    with tm.assert_produces_warning(warn, match=op_msg):
-        expected = gb.transform(op, *args)
-
+    expected = float_frame.groupby(ones, axis=axis).transform(op, *args)
     result = float_frame.transform(op, axis, *args)
     tm.assert_frame_equal(result, expected)
 
@@ -303,16 +286,11 @@ def test_transform_groupby_kernel_frame(request, axis, float_frame, op):
     float_frame["E"] = float_frame["A"].copy()
     assert len(float_frame._mgr.arrays) > 1
 
-    if axis in (0, "index"):
+    if axis == 0 or axis == "index":
         ones = np.ones(float_frame.shape[0])
     else:
         ones = np.ones(float_frame.shape[1])
-    with tm.assert_produces_warning(FutureWarning, match=msg):
-        gb2 = float_frame.groupby(ones, axis=axis)
-    warn = FutureWarning if op == "fillna" else None
-    op_msg = "DataFrameGroupBy.fillna is deprecated"
-    with tm.assert_produces_warning(warn, match=op_msg):
-        expected2 = gb2.transform(op, *args)
+    expected2 = float_frame.groupby(ones, axis=axis).transform(op, *args)
     result2 = float_frame.transform(op, axis, *args)
     tm.assert_frame_equal(result2, expected2)
 

@@ -3,27 +3,21 @@ EA-compatible analogue to np.putmask
 """
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING,
-    Any,
-)
+from typing import Any
 
 import numpy as np
 
 from pandas._libs import lib
+from pandas._typing import (
+    ArrayLike,
+    npt,
+)
+from pandas.compat import np_version_under1p21
 
 from pandas.core.dtypes.cast import infer_dtype_from
 from pandas.core.dtypes.common import is_list_like
 
 from pandas.core.arrays import ExtensionArray
-
-if TYPE_CHECKING:
-    from pandas._typing import (
-        ArrayLike,
-        npt,
-    )
-
-    from pandas import MultiIndex
 
 
 def putmask_inplace(values: ArrayLike, mask: npt.NDArray[np.bool_], value: Any) -> None:
@@ -72,6 +66,9 @@ def putmask_without_repeat(
     mask : np.ndarray[bool]
     new : Any
     """
+    if np_version_under1p21:
+        new = setitem_datetimelike_compat(values, mask.sum(), new)
+
     if getattr(new, "ndim", 0) >= 1:
         new = new.astype(values.dtype, copy=False)
 
@@ -99,7 +96,7 @@ def putmask_without_repeat(
 
 
 def validate_putmask(
-    values: ArrayLike | MultiIndex, mask: np.ndarray
+    values: ArrayLike, mask: np.ndarray
 ) -> tuple[npt.NDArray[np.bool_], bool]:
     """
     Validate mask and check if this putmask operation is a no-op.
@@ -136,9 +133,9 @@ def setitem_datetimelike_compat(values: np.ndarray, num_set: int, other):
     other : Any
     """
     if values.dtype == object:
-        dtype, _ = infer_dtype_from(other)
+        dtype, _ = infer_dtype_from(other, pandas_dtype=True)
 
-        if lib.is_np_dtype(dtype, "mM"):
+        if isinstance(dtype, np.dtype) and dtype.kind in ["m", "M"]:
             # https://github.com/numpy/numpy/issues/12550
             #  timedelta64 will incorrectly cast to int
             if not is_list_like(other):
