@@ -3,11 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CureTrack - CureTrack</title>
+    <title>CureTrack</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='CSS/CureTrack.css') }}">
     <script src="{{ url_for('static', filename='JS/CureTrack.js') }}" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
+    <style>
+        html {
+            scroll-behavior: smooth;
+        }
+    </style>
 </head>
 <body>
     <!-- Loading Screen -->
@@ -28,18 +32,14 @@
             <ul>
                 <li><a href="/">Home</a></li>
                 <li><a href="/curetrack">CureTrack</a></li>
-                <li><a href="/about">About</a></li>
             </ul>
         </nav>
     </div>
 
-
     <div class="content">
         <div class="left">
             <h2>Explore Our Solutions</h2>
-            <div class="button"> 
-                <a id="our-services-link" href="#our-services">Our Services</a>
-            </div>
+                <a href="/curetrack" class="submit_button">Our Services</a>
             <div class="vertical-line"></div>
             <div class="HOW_IT_WORKS">
                 <h3>SCROLL DOWN</h3> 
@@ -51,43 +51,42 @@
                     <!-- Form for entering symptoms -->
                     <form action="/predict" method="POST" class="symptom-form">
                         <h3>Select Symptoms:</h3>
-                        
-                        <!-- Container for the fieldsets -->
                         <div class="symptom-categories">
-                            {% for category, symptoms in symptom_categories.items() %}
+                            {% for body_part, symptoms in symptoms_by_body_part.items() %}
                                 <fieldset class="symptom-category">
-                                    <legend>{{ category }}</legend>
-                                    <div class="symptom-group">
+                                    <legend>{{ body_part }}</legend>
+                                    <ul class="symptom-list">
                                         {% for symptom in symptoms %}
-                                            <label class="symptom-item">
-                                                <input type="checkbox" name="symptoms" value="{{ symptom }}"> {{ symptom.replace('_', ' ').title() }}
-                                            </label>
+                                            <li class="symptom-item">
+                                                <label>
+                                                    <input type="checkbox" name="symptoms" value="{{ symptom }}"> {{ symptom.replace('_', ' ').title() }}
+                                                </label>
+                                            </li>
                                         {% endfor %}
-                                    </div>
+                                    </ul>
                                 </fieldset>
                             {% endfor %}
                         </div>
-
                         <button type="submit" class="submit-button">Diagnose</button>
                     </form>
 
                     <!-- Display diagnosis results here -->
                     <div class="results">
-                        {% if predicted_disease %}
+                        {% if disease %}
                             <div class="diagnosis-results">
-                                <h4>Diagnosis: {{ predicted_disease }}</h4>
+                                <h4>Diagnosis: {{ disease }}</h4>
 
                                 <!-- Description -->
                                 <div class="disease-section-description">
                                     <h5>Description:</h5>
-                                    <p>{{ disease_description }}</p>
+                                    <p>{{ description }}</p>
                                 </div>
 
                                 <!-- Precautions -->
                                 <div class="disease-section-precaution">
                                     <h5>Precautions:</h5>
                                     <ul>
-                                        {% for precaution in disease_precaution %}
+                                        {% for precaution in precautions %}
                                             <li>{{ precaution }}</li>
                                         {% endfor %}
                                     </ul>
@@ -96,14 +95,14 @@
                                 <!-- Medication -->
                                 <div class="disease-section-medication">
                                     <h5>Medication:</h5>
-                                    <p>{{ disease_medication }}</p>
+                                    <p>{{ medication }}</p>
                                 </div>
 
                                 <!-- Diet -->
                                 <div class="disease-section-diet">
                                     <h5>Diet:</h5>
                                     <ul>
-                                        {% for diet in disease_diet %}
+                                        {% for diet in diets %}
                                             <li>{{ diet }}</li>
                                         {% endfor %}
                                     </ul>
@@ -113,7 +112,7 @@
                                 <div class="disease-section-workout">
                                     <h5>Workout:</h5>
                                     <ul>
-                                        {% for workout in disease_workout %}
+                                        {% for workout in workout %}
                                             <li>{{ workout }}</li>
                                         {% endfor %}
                                     </ul>
@@ -122,10 +121,18 @@
 
                             <!-- Button to download PDF -->
                             <div class="pdf-button">
-                                <button id="download-pdf" class="submit-button">Get Your Results</button>
+                                <form action="/download_prescription" method="POST">
+                                    <input type="hidden" name="predicted_disease" value="{{ disease }}">
+                                    <input type="hidden" name="disease_description" value="{{ description }}">
+                                    <input type="hidden" name="disease_precaution" value="{{ precautions | join(',') }}">
+                                    <input type="hidden" name="disease_medication" value="{{ medication }}">
+                                    <input type="hidden" name="disease_diet" value="{{ diets | join(',') }}">
+                                    <input type="hidden" name="disease_workout" value="{{ workout | join(',') }}">
+                                    <button type="submit" class="submit-button">Get Your Results</button>
+                                </form>
                             </div>
                         {% endif %}
-                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -136,5 +143,12 @@
             </video>
         </div>
     </div>
+
+    <footer>
+        <H3>By: IdontKnow</H3>
+        <H3>Designer: Krushna Thakkar</H3>
+        <H3>Website: CureTrack</H3>
+    </footer>
+
 </body>
 </html>

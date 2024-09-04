@@ -107,6 +107,7 @@ nav ul li a {
     font-size: 20px;
     padding: 20px;
     top: 40px;
+    text-align: center;
 }
 
 .button {
@@ -114,8 +115,12 @@ nav ul li a {
     padding: 0.5rem 1rem;
     color: burlywood;
     text-decoration: none;
-    border: 2px solid brown;
     border-radius: 5px;
+    background-color: rgb(86, 116, 226);
+}
+
+.button:hover {
+    background-color: green;
 }
 
 .right {
@@ -131,7 +136,7 @@ nav ul li a {
 
 .vertical-line {
     border-left: 1px solid white;
-    height: 52.5%;
+    height: 56.5%;
     position: relative;
     margin-top: 20px;
     left: 300px;
@@ -181,7 +186,7 @@ footer {
     background: transparent;
     color: burlywood;
     text-align: center;
-    padding: 10px;
+    padding: 1px;
     z-index: 4; /* Ensure footer is on top of everything */
 }
 

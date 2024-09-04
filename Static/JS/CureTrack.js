@@ -6,15 +6,6 @@ document.querySelector("form").addEventListener("submit", function(event) {
     }
 });
 
-document.getElementById('our-services-link').addEventListener('click', function() {
-    // Clear the form
-    var form = document.querySelector('.symptom-form');
-    form.reset();
-
-    // Optional: Scroll to the form after clearing it
-    form.scrollIntoView({ behavior: 'smooth' });
-});
-
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     const loadingScreen = document.querySelector('.loading-screen');
@@ -59,3 +50,8 @@ document.addEventListener('DOMContentLoaded', function() {
         downloadPdfButton.addEventListener('click', downloadPDF);
     }
 });
+
+function scrollToForm() {
+    const formSection = document.getElementById('symptom-form-section');
+    formSection.scrollIntoView({ behavior: 'smooth' });
+}
