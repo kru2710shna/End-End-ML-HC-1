@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.querySelector('form');
     const loadingScreen = document.querySelector('.loading-screen');
     const content = document.querySelector('.content');
+    const forms = document.querySelector(".symptom-form");
+    const symptomSelects = document.querySelectorAll(".symptom-select");
 
     form.addEventListener('submit', function(event) {
         event.preventDefault();
@@ -27,6 +29,21 @@ document.addEventListener('DOMContentLoaded', function() {
             // Submit the form
             form.submit();
         }, 3000); // 4000 milliseconds = 4 seconds
+    });
+
+    form.addEventListener("submit", function (event) {
+        let hasSelection = false;
+        
+        symptomSelects.forEach(select => {
+            if (select.value !== "") {
+                hasSelection = true;
+            }
+        });
+        
+        if (!hasSelection) {
+            event.preventDefault();  // Prevent form submission
+            alert("Please select at least one symptom before diagnosing.");
+        }
     });
 });
 

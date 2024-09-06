@@ -27,112 +27,53 @@
         <div class="overlay">
             <h1>Welcome to CureTrack</h1>
             <p class="subtext">"Your Journey to Health Starts Here"</p>
+
+            <!-- Scroll Down Indicator -->
+            <div class="scroll-down-indicator">
+                <p>Scroll Down</p>
+                <div class="arrows">
+                    &#x2193; &#x2193; <!-- Downward arrows using Unicode -->
+                </div>
+            </div>
+
         </div>
         <nav>
             <ul>
-                <li><a href="/">Home</a></li>
-                <li><a href="/curetrack">CureTrack</a></li>
+                <li><a href="/">CureTrack</a></li>
+                <li><a href="/curetrack">Service</a></li>
             </ul>
         </nav>
+        <!-- Flash messages -->
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-messages">
+            {% for category, message in messages %}
+            <div class="flash-message {{ category }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
     </div>
 
     <div class="content">
         <div class="left">
-            <h2>Explore Our Solutions</h2>
-                <a href="/curetrack" class="submit_button">Our Services</a>
-            <div class="vertical-line"></div>
-            <div class="HOW_IT_WORKS">
-                <h3>SCROLL DOWN</h3> 
-            </div>
-            <div class="circular-container">
-                <div class="text__2">
-                    <h3>Discover Our Advanced Machine Learning Solutions Tailored to Patient's Needs.</h3>
-
-                    <!-- Form for entering symptoms -->
-                    <form action="/predict" method="POST" class="symptom-form">
-                        <h3>Select Symptoms:</h3>
-                        <div class="symptom-categories">
-                            {% for body_part, symptoms in symptoms_by_body_part.items() %}
-                                <fieldset class="symptom-category">
-                                    <legend>{{ body_part }}</legend>
-                                    <ul class="symptom-list">
-                                        {% for symptom in symptoms %}
-                                            <li class="symptom-item">
-                                                <label>
-                                                    <input type="checkbox" name="symptoms" value="{{ symptom }}"> {{ symptom.replace('_', ' ').title() }}
-                                                </label>
-                                            </li>
-                                        {% endfor %}
-                                    </ul>
-                                </fieldset>
-                            {% endfor %}
-                        </div>
-                        <button type="submit" class="submit-button">Diagnose</button>
-                    </form>
-
-                    <!-- Display diagnosis results here -->
-                    <div class="results">
-                        {% if disease %}
-                            <div class="diagnosis-results">
-                                <h4>Diagnosis: {{ disease }}</h4>
-
-                                <!-- Description -->
-                                <div class="disease-section-description">
-                                    <h5>Description:</h5>
-                                    <p>{{ description }}</p>
-                                </div>
-
-                                <!-- Precautions -->
-                                <div class="disease-section-precaution">
-                                    <h5>Precautions:</h5>
-                                    <ul>
-                                        {% for precaution in precautions %}
-                                            <li>{{ precaution }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-
-                                <!-- Medication -->
-                                <div class="disease-section-medication">
-                                    <h5>Medication:</h5>
-                                    <p>{{ medication }}</p>
-                                </div>
-
-                                <!-- Diet -->
-                                <div class="disease-section-diet">
-                                    <h5>Diet:</h5>
-                                    <ul>
-                                        {% for diet in diets %}
-                                            <li>{{ diet }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-
-                                <!-- Workout -->
-                                <div class="disease-section-workout">
-                                    <h5>Workout:</h5>
-                                    <ul>
-                                        {% for workout in workout %}
-                                            <li>{{ workout }}</li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                            </div>
-
-                            <!-- Button to download PDF -->
-                            <div class="pdf-button">
-                                <form action="/download_prescription" method="POST">
-                                    <input type="hidden" name="predicted_disease" value="{{ disease }}">
-                                    <input type="hidden" name="disease_description" value="{{ description }}">
-                                    <input type="hidden" name="disease_precaution" value="{{ precautions | join(',') }}">
-                                    <input type="hidden" name="disease_medication" value="{{ medication }}">
-                                    <input type="hidden" name="disease_diet" value="{{ diets | join(',') }}">
-                                    <input type="hidden" name="disease_workout" value="{{ workout | join(',') }}">
-                                    <button type="submit" class="submit-button">Get Your Results</button>
-                                </form>
-                            </div>
-                        {% endif %}
-                    </div>
+            <h3 class="heading_left">There are total 132 major symptoms which are divided into 10 groups</h3>
+            <p><span class="quoted-text">"Skin"</span> - symptoms refer to a category of symptoms related to the skin</p>
+            <p><span class="quoted-text">"Respiratory System"</span> - symptoms can indicate a range of conditions affecting the lungs and airways</p>
+            <p><span class="quoted-text">"Urinary System"</span> - symptoms can indicate issues with the kidneys, ureters, bladder, or urethra</p>
+            <p><span class="quoted-text">"Digestive System"</span> - symptoms can indicate issues with any part of the digestive tract, including the mouth, esophagus, stomach, intestines, liver, pancreas, and rectum</p>
+            <p><span class="quoted-text">"Musculoskeletal System"</span> - symptoms relate to issues with the muscles, bones, joints, and connective tissues</p>
+            <p><span class="quoted-text">"Cardiovascular System"</span> - symptoms relate to the heart and blood vessels</p>
+            <p><span class="quoted-text">"Endocrine System"</span> - symptoms are related to hormone imbalances or disorders affecting glands like the thyroid, adrenal glands, pituitary gland, and pancreas</p>
+            <p><span class="quoted-text">"Reproductive System"</span> - symptoms can vary widely between males and females and may indicate various conditions affecting the reproductive organs</p>
+            <p><span class="quoted-text">"General Symptoms"</span> - These symptoms can be indicative of a range of medical conditions, from minor issues to more serious illnesses</p>
+            <h4>If someone is experiencing multiple or severe symptoms, it's important to seek medical evaluation for a proper diagnosis and treatment.</h4>
+        
+            <a href="/curetrack" class="submit_button">Our Services</a>
+            <h4 class="SCROLL">SCROLL DOWN</h4>
+            <div class="arrows-container_1">
+                <div class="arrows_1">
+                    &#x2193; &#x2193;
                 </div>
             </div>
         </div>
@@ -144,11 +85,94 @@
         </div>
     </div>
 
-    <footer>
-        <H3>By: IdontKnow</H3>
-        <H3>Designer: Krushna Thakkar</H3>
-        <H3>Website: CureTrack</H3>
-    </footer>
+    <div class="circular-container">
+        <div class="text__2">
+            <h3>Discover Our Advanced Machine Learning Solutions Tailored to Patient's Needs.</h3>
+
+            <!-- Form for entering symptoms -->
+            <form action="/predict" method="POST" class="symptom-form">
+                <h3>Select Symptoms:</h3>
+                <div class="symptom-categories">
+                    {% for body_part, symptoms in symptoms_by_body_part.items() %}
+                        <fieldset class="symptom-category">
+                            <legend>{{ body_part }}</legend>
+                            <select name="symptoms" class="symptom-select">
+                                <option value="" disabled selected>Select a symptom</option>
+                                {% for symptom in symptoms %}
+                                    <option value="{{ symptom }}">{{ symptom.replace('_', ' ').title() }}</option>
+                                {% endfor %}
+                            </select>
+                        </fieldset>
+                    {% endfor %}
+                </div>
+                <button type="submit" class="submit-button">Diagnose</button>
+            </form>
+
+            <!-- Display diagnosis results here -->
+            <div class="results">
+                {% if disease %}
+                    <div class="diagnosis-results">
+                        <h4>Diagnosis: {{ disease }}</h4>
+
+                        <!-- Description -->
+                        <div class="disease-section-description">
+                            <h5>Description:</h5>
+                            <p>{{ description }}</p>
+                        </div>
+
+                        <!-- Precautions -->
+                        <div class="disease-section-precaution">
+                            <h5>Precautions:</h5>
+                            <ul>
+                                {% for precaution in precautions %}
+                                    <li>{{ precaution }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <!-- Medication -->
+                        <div class="disease-section-medication">
+                            <h5>Medication:</h5>
+                            <p>{{ medication }}</p>
+                        </div>
+
+                        <!-- Diet -->
+                        <div class="disease-section-workout">
+                            <h5>Workout:</h5>
+                            <ul>
+                                {% for exercise in workout %}
+                                    <li>{{ exercise }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <!-- Workout -->
+                        <div class="disease-section-workout">
+                            <h5>Workout:</h5>
+                            <ul>
+                                {% for workout in workout %}
+                                    <li>{{ workout }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Button to download PDF -->
+                    <div class="pdf-button">
+                        <form action="/download_prescription" method="POST">
+                            <input type="hidden" name="predicted_disease" value="{{ disease }}">
+                            <input type="hidden" name="disease_description" value="{{ description }}">
+                            <input type="hidden" name="disease_precaution" value="{{ precautions | join(',') }}">
+                            <input type="hidden" name="disease_medication" value="{{ medication }}">
+                            <input type="hidden" name="disease_diet" value="{{ diets | join(',') }}">
+                            <input type="hidden" name="disease_workout" value="{{ workout | join(',') }}">
+                            <button type="submit" class="submit-button">Download Prescription!</button>
+                        </form>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 
 </body>
 </html>

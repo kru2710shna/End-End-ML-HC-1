@@ -1,13 +1,17 @@
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, flash , redirect , url_for ,  make_response
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
 import numpy as np
 import pickle
 import io
 from fpdf import FPDF
+import os
+from io import BytesIO
 
 # Specify the location of the templates folder
 app = Flask(__name__, template_folder='Static/templates', static_folder='Static')
+app.secret_key = os.getenv('APP_SECRET_KEY')
+
 
 # Load Datasets
 data_symptoms = pd.read_csv("Datasets/symtoms_df.csv")
@@ -18,8 +22,6 @@ data_precaution = pd.read_csv("Datasets/precautions_df.csv")
 precautions = ['Precaution_1', 'Precaution_2', 'Precaution_3', 'Precaution_4']
 data_workout = pd.read_csv("Datasets/workout_df.csv")
 df = pd.read_csv("Datasets/Training.csv")
-
-
 # Load Model
 svc_production = pickle.load(open('Models/production_model.pkl', 'rb'))
 
@@ -88,6 +90,21 @@ symptom_categories = {
 def inject_symptom_categories():
     return dict(symptoms_by_body_part=symptom_categories)
 
+# Example function that processes selected symptoms
+def get_symptom_category(symptom):
+    for category, symptoms in symptom_categories.items():
+        if symptom in symptoms:
+            return category
+    return None  # If the symptom is not found
+
+selected_symptom = 'lack_of_concentration'  # Example symptom
+category = get_symptom_category(selected_symptom)
+
+
+if category is None:
+    print(f"Error: '{selected_symptom}' is not a valid symptom.")
+else:
+    print(f"The symptom '{selected_symptom}' belongs to the category '{category}'.")
 # Model Prediction function
 def get_predicted_value(patient_symptoms):
     input_vector = np.zeros(len(symptoms_dict))
@@ -97,38 +114,57 @@ def get_predicted_value(patient_symptoms):
 
 # Method prediction for individual diagnostic
 def get_everything(predicted_disease):
+    # Initialization of lists
     user_disease_description_list = None
-    user_disease_precaution_list = None
+    user_disease_precaution_list = []
     user_disease_medication_list = None
     user_disease_diets_list = None
     user_disease_workout_list = None
 
     # Retrieve the description
-    if predicted_disease in data_description['Disease'].values:
-        user_disease_description = data_description.loc[data_description['Disease'] == predicted_disease, 'Description'].values[0]
-        user_disease_description_list = user_disease_description.strip(".")
+    if 'Disease' in data_description.columns and 'Description' in data_description.columns:
+        if predicted_disease in data_description['Disease'].values:
+            user_disease_description = data_description.loc[data_description['Disease'] == predicted_disease, 'Description'].values
+            if user_disease_description.size > 0:
+                user_disease_description_list = user_disease_description[0].strip(".")
 
     # Retrieve the precautions
-    if predicted_disease in data_precaution['Disease'].values:
-        user_disease_precaution = data_precaution.loc[data_precaution['Disease'] == predicted_disease, precautions].values[0]
-        user_disease_precaution_list = [pre for pre in user_disease_precaution if pd.notna(pre)]
+    precaution_columns = ['Precaution_1', 'Precaution_2', 'Precaution_3', 'Precaution_4']
+    if 'Disease' in data_precaution.columns:
+        if predicted_disease in data_precaution['Disease'].values:
+            precautions = data_precaution.loc[data_precaution['Disease'] == predicted_disease, precaution_columns].values
+            for row in precautions:
+                user_disease_precaution_list.extend([pre for pre in row if pd.notna(pre)])
 
     # Retrieve the medication
-    if predicted_disease in data_medication['Disease'].values:
-        user_disease_medication = data_medication.loc[data_medication['Disease'] == predicted_disease, 'Medication'].values[0]
-        user_disease_medication_list = user_disease_medication.strip(".")
+    if 'Disease' in data_medication.columns and 'Medication' in data_medication.columns:
+        if predicted_disease in data_medication['Disease'].values:
+            user_disease_medication = data_medication.loc[data_medication['Disease'] == predicted_disease, 'Medication'].values
+            if user_disease_medication.size > 0:
+                user_disease_medication_list = user_disease_medication[0].strip(".")
 
     # Retrieve the diet
-    if predicted_disease in data_diets['Disease'].values:
-        user_disease_diets = data_diets.loc[data_diets['Disease'] == predicted_disease, 'Diet'].values[0]
-        user_disease_diets_list = eval(user_disease_diets) if isinstance(user_disease_diets, str) else [food for food in user_disease_diets if pd.notna(food)]
+    if 'Disease' in data_diets.columns and 'Diet' in data_diets.columns:
+        if predicted_disease in data_diets['Disease'].values:
+            user_disease_diets = data_diets.loc[data_diets['Disease'] == predicted_disease, 'Diet'].values
+            if user_disease_diets.size > 0:
+                diet_value = user_disease_diets[0]
+                if isinstance(diet_value, str):
+                    user_disease_diets_list = eval(diet_value) if not pd.isna(diet_value) else []
+                else:
+                    user_disease_diets_list = [food for food in diet_value if not pd.isna(food)]
 
     # Retrieve the workout
-    if predicted_disease in data_workout['disease'].values:
-        user_disease_workout = data_workout.loc[data_workout['disease'] == predicted_disease, 'workout'].values
-        user_disease_workout_list = [w for w in user_disease_workout if pd.notna(w)]
+    if 'disease' in data_workout.columns and 'workout' in data_workout.columns:
+        if predicted_disease in data_workout['disease'].values:
+            user_disease_workout = data_workout.loc[data_workout['disease'] == predicted_disease, 'workout'].values
+            if user_disease_workout.size > 0:
+                user_disease_workout_list = [w for w in user_disease_workout if not pd.isna(w)]
 
     return user_disease_description_list, user_disease_precaution_list, user_disease_medication_list, user_disease_diets_list, user_disease_workout_list
+
+
+
 
 @app.route('/')
 def home():
@@ -143,6 +179,14 @@ def curetrack():
 def predict():
     if request.method == 'POST':
         selected_symptoms = request.form.get('symptoms')
+        # if not selected_symptoms:
+        #     # No symptoms selected, redirect back to the form with an error message
+        #     return render_template('CureTrack.html', error="Please select one or more symptoms.")
+        if not selected_symptoms:
+            # If no symptoms are selected, flash a message to the user
+            flash("Please select at least one symptom before submitting.", "warning")
+            return redirect(url_for('curetrack')) 
+        
         user_symptons = [s.strip() for s in selected_symptoms.split(",")]
         user_sympton = [sym.strip("[]' ") for sym in user_symptons]
         predicted_disease = get_predicted_value(user_sympton)
@@ -166,16 +210,40 @@ def generate_pdf(predicted_disease, des, pre, med, diet, workout):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
-    pdf.cell(200, 10, txt="Diagnosis Result", ln=True, align="C")
-    pdf.ln(10)
-    pdf.cell(200, 10, txt=f"Disease: {predicted_disease}", ln=True)
-    pdf.cell(200, 10, txt=f"Description: {des}", ln=True)
-    pdf.cell(200, 10, txt=f"Medication: {med}", ln=True)
-    pdf.cell(200, 10, txt=f"Diet: {', '.join(diet)}", ln=True)
-    pdf.cell(200, 10, txt=f"Workout: {', '.join(workout)}", ln=True)
-    pdf.cell(200, 10, txt=f"Precautions: {', '.join(pre)}", ln=True)
     
-    return pdf
+    pdf.cell(200, 10, txt="Prescription Details", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.cell(200, 10, txt=f"Disease: {predicted_disease}", ln=True)
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt=f"Description: {des}", ln=True)
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt="Precautions:", ln=True)
+    for precaution in pre:
+        pdf.cell(200, 10, txt=f"- {precaution.strip()}", ln=True)
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt=f"Medication: {med}", ln=True)
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt="Diets:", ln=True)
+    for diet_item in diet:
+        pdf.cell(200, 10, txt=f"- {diet_item.strip()}", ln=True)
+    pdf.ln(5)
+    
+    pdf.cell(200, 10, txt="Workouts:", ln=True)
+    for workout_item in workout:
+        pdf.cell(200, 10, txt=f"- {workout_item.strip()}", ln=True)
+    
+    # Save to BytesIO object
+    pdf_output = io.BytesIO()
+    pdf_output.write(pdf.output(dest='S').encode('latin1'))
+    pdf_output.seek(0)  # Move to the beginning of the BytesIO object
+    
+    return pdf_output
+
 
 @app.route('/download_prescription', methods=['POST'])
 def download_prescription():
@@ -186,16 +254,20 @@ def download_prescription():
         med = request.form.get('disease_medication', 'N/A')
         diet = request.form.get('disease_diet', 'N/A').split(',')
         workout = request.form.get('disease_workout', 'N/A').split(',')
+
+        pdf_output = generate_pdf(predicted_disease, des, pre, med, diet, workout)
         
-        pdf = generate_pdf(predicted_disease, des, pre, med, diet, workout)
-        
-        pdf_output = io.BytesIO()
-        pdf.output(pdf_output)
-        pdf_output.seek(0)
-        
-        return send_file(pdf_output, as_attachment=True, download_name="prescription.pdf")
+        return send_file(pdf_output, as_attachment=True, download_name="prescription.pdf", mimetype='application/pdf')
     except Exception as e:
-        return str(e), 500
-    
+        print(f"An error occurred: {e}")
+        flash("An error occurred while generating the prescription. Please try again.", "danger")
+        return redirect(url_for('curetrack'))
+
+@app.route('/test_pdf')
+def test_pdf():
+    pdf_output = generate_pdf('Test Disease', 'Test Description', ['Precaution 1', 'Precaution 2'], 'Test Medication', ['Diet 1', 'Diet 2'], ['Workout 1', 'Workout 2'])
+    return send_file(pdf_output, as_attachment=True, download_name="test_prescription.pdf", mimetype='application/pdf')
+
+
 if __name__ == '__main__':
     app.run(debug=True)

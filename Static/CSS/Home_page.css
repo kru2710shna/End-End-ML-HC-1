@@ -1,14 +1,15 @@
-body {
+body, html {
     margin: 0;
     padding: 0;
-    font-family: Arial, sans-serif;
-    color: white;
-    position: relative; /* Make sure the body is positioned relative to use z-index */
+    width: 100%;
+    height: 100%;
+    overflow-x: hidden; /* Prevent horizontal scrolling */
 }
 
 .video-background {
     position: relative;
     height: 100vh;
+    width: 100%;
     overflow: hidden;
 }
 
@@ -21,7 +22,11 @@ body {
     object-fit: cover;
     z-index: 1; /* Make sure the video is behind the overlay */
 }
+.top_text {
+    padding: 0;
+    color: brown
 
+}
 .overlay {
     position: absolute;
     top: 0;
@@ -33,18 +38,36 @@ body {
     align-items: center;
     justify-content: center;
     text-align: center;
-    color: brown;
-    z-index: 2; /* Make sure overlay is above the video */
+    color: solid wheat;
+    z-index: 2; 
 }
 
 .overlay h1 {
     font-size: 20px;
 }
 
-.overlay .subtext {
-    color: blanchedalmond;
+.subtext_1 {
+    color: white;
+    font-size: 25px;
+    padding: 0px;
+    text-align: center;
+    font-size: 14px;
+    margin-top: -20px; 
+}
+
+.subtext {
+    color: white;
     font-size: 25px;
     padding: 5px;
+    text-align: left;
+    font-size: 14px;
+}
+.subtext_2 {
+    color: white;
+    font-size: 25px;
+    padding: 5px;
+    text-align: center;
+    font-size: 14px;
 }
 
 nav {
@@ -53,7 +76,9 @@ nav {
     width: 100%;
     background: rgba(103, 88, 69, 0.704);
     padding: 10px;
-    z-index: 3; /* Make sure nav is above everything in the video background */
+    z-index: 3; 
+    border-bottom: 5px solid black;
+
 }
 
 nav ul {
@@ -76,8 +101,49 @@ nav ul li a {
 .content {
     display: flex;
     height: 100vh;
+    width: 100%; /* Ensure it takes up the full width of the screen */
     background-color: white;
     font-family: 'Times New Roman', serif;
+    margin: 0; /* Remove any margin that might be causing the whitespace */
+    padding: 0; /* Remove any padding that might be causing the whitespace */
+    box-sizing: border-box; /* Ensure padding and border are included in the element's total width and height */
+}
+
+.scroll-down-indicator {
+    position: absolute;
+    bottom: 30px; 
+    text-align: center;
+    font-size: 23px;
+    animation: fadeIn 3s ease-in-out infinite;
+    color: wheat;
+}
+
+.arrows {
+    font-size: 24px;
+    margin-top: 5px;
+    animation: bounce 3s infinite;
+    color: wheat;
+}
+
+@keyframes bounce {
+    0%, 20%, 50%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-10px);
+    }
+    60% {
+        transform: translateY(-5px);
+    }
+}
+
+@keyframes fadeIn {
+    0% {
+        opacity: 0;
+    }
+    100% {
+        opacity: 10;
+    }
 }
 
 .left {
@@ -85,7 +151,6 @@ nav ul li a {
     padding: 2rem;
     box-sizing: border-box;
     color: burlywood;
-    bottom: 50px;
     background-color: black;
 }
 
@@ -104,10 +169,8 @@ nav ul li a {
     position: relative;
     font-family: 'Times New Roman', serif;
     color: brown;
-    font-size: 20px;
+    text-align: left;
     padding: 20px;
-    top: 40px;
-    text-align: center;
 }
 
 .button {
@@ -136,7 +199,7 @@ nav ul li a {
 
 .vertical-line {
     border-left: 1px solid white;
-    height: 56.5%;
+    height: 50%;
     position: relative;
     margin-top: 20px;
     left: 300px;
@@ -146,8 +209,13 @@ nav ul li a {
     position: relative;
     left: 230px;
     font-family: 'Times New Roman', serif;
-    color: brown;
+    color: white;
     font-size: 14px;
+}
+
+.text_3 {
+    font-size: 30px;
+    margin-top: -20px;
 }
 
 .background-video {
@@ -157,14 +225,14 @@ nav ul li a {
     width: 100%;
     height: 100%;
     overflow: hidden;
-    z-index: 1; /* Ensure this is below the content */
+    z-index: 1; 
 }
 
 .background-video video {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    z-index: 1; /* Ensure this is below the content */
+    z-index: 1; 
 }
 
 .circular-container {
@@ -178,19 +246,14 @@ nav ul li a {
     z-index: 2; /* Ensure this is above the background video */
 }
 
-footer {
-    position: fixed;
-    bottom: 0;
-    left: 0;
+.background-image {
+    background-image: url("{{ url_for('static', filename='Images/nature-Machine-learning-in-healthcare-1a827e1f74e89142b039c8cf0872b49e.jpg') }}");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
     width: 100%;
-    background: transparent;
-    color: burlywood;
-    text-align: center;
-    padding: 1px;
-    z-index: 4; /* Ensure footer is on top of everything */
+    height: 100vh; /* Ensure it takes up the full viewport height */
+    position: relative; /* To make sure it stacks correctly in the layout */
+    z-index: 1; /* Make sure it is properly stacked */
 }
 
-footer p {
-    margin: 5px 0;
-    font-size: 14px;
-}
